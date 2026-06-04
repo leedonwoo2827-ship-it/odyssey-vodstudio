@@ -24,12 +24,13 @@ async function checkAuth() {
     const d = await api("/auth");
     authed = !!d.authenticated;
   } catch (e) {}
+  const line = $("nlmStatusLine");
   if (authed) {
-    badge.textContent = "NotebookLM: 연결됨"; badge.className = "badge ok";
-    $("nlmStatusLine").textContent = "연결됨 ✓";
+    if (badge) { badge.textContent = "NotebookLM: 연결됨"; badge.className = "badge ok"; }
+    if (line) line.textContent = "연결됨 ✓";
   } else {
-    badge.textContent = "NotebookLM: 미연결"; badge.className = "badge no";
-    $("nlmStatusLine").innerHTML = "미연결 — <code>nlm login</code> 필요 (슬라이드/대본 생성 시)";
+    if (badge) { badge.textContent = "NotebookLM: 미연결"; badge.className = "badge no"; }
+    if (line) line.innerHTML = "미연결 — <code>nlm login</code> 필요 (NotebookLM 자동 모드 사용 시)";
   }
   return authed;
 }
@@ -155,6 +156,7 @@ async function pollJob() {
 // ---- review UI ----
 function renderReview(job) {
   $("reviewCard").classList.remove("hidden");
+  markStep("bundle");
   const r = job.result || {};
   const warns = $("warnings");
   warns.innerHTML = "";
@@ -217,6 +219,7 @@ async function buildBundle() {
       body: JSON.stringify({
         chapter: parseInt($("chapter").value, 10) || 1,
         title: $("bundleTitle").value.trim() || "VOD Studio Deck",
+        output_dir: $("outputDir").value.trim() || null,
         slides: collectSlides(),
       }),
     });
@@ -244,6 +247,7 @@ function showBundleResult(payload) {
   link.classList.remove("hidden");
   // Reveal the mp4maker render step now that a bundle exists.
   $("renderCard").classList.remove("hidden");
+  markStep("video");
   refreshAudioStatus();
 }
 
@@ -423,12 +427,23 @@ async function genFromPdf() {
   }
 }
 
-// ---- wiring ----
-$("fromPdfBtn").addEventListener("click", genFromPdf);
-$("modeManual").addEventListener("click", () => setMode("manual"));
-$("modeAuto").addEventListener("click", () => setMode("auto"));
-$("manualBtn").addEventListener("click", manualBuild);
-$("genScriptBtn").addEventListener("click", genScript);
+// ---- stepper (header progress) ----
+const STEP_ORDER = ["script", "images", "bundle", "video"];
+function markStep(name) {
+  const idx = STEP_ORDER.indexOf(name);
+  if (idx < 0) return;
+  document.querySelectorAll("#stepper .step").forEach(el => {
+    const i = STEP_ORDER.indexOf(el.dataset.step);
+    el.classList.toggle("active", i === idx);
+    el.classList.toggle("done", i >= 0 && i < idx);
+  });
+}
+
+// ---- wiring (null-safe: NotebookLM-auto elements were removed) ----
+function on(id, ev, fn) { const el = $(id); if (el) el.addEventListener(ev, fn); }
+on("fromPdfBtn", "click", genFromPdf);
+on("manualBtn", "click", manualBuild);
+on("genScriptBtn", "click", genScript);
 
 // PDF upload: filename display + drag & drop
 (function wirePdf() {
@@ -447,15 +462,13 @@ $("genScriptBtn").addEventListener("click", genScript);
     if (f) { const dt = new DataTransfer(); dt.items.add(f); input.files = dt.files; show(); }
   });
 })();
-$("loadNotebooks").addEventListener("click", loadNotebooks);
-$("gearBtn").addEventListener("click", toggleSettings);
-$("nlmRecheck").addEventListener("click", async () => { if (await checkAuth()) loadNotebooks(); });
-$("notebook").addEventListener("change", syncStartEnabled);
-$("startBtn").addEventListener("click", startJob);
-$("buildBtn").addEventListener("click", buildBundle);
-$("renderBtn").addEventListener("click", startRender);
+on("loadNotebooks", "click", loadNotebooks);
+on("gearBtn", "click", toggleSettings);
+on("nlmRecheck", "click", async () => { await checkAuth(); });
+on("notebook", "change", syncStartEnabled);
+on("startBtn", "click", startJob);
+on("buildBtn", "click", buildBundle);
+on("renderBtn", "click", startRender);
 
-// default: manual mode (no NotebookLM/key required)
-setMode("manual");
 checkGemini();
-checkAuth();  // updates badge only; notebook list loads when auto mode opened
+checkAuth();

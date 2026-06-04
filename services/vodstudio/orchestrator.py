@@ -195,8 +195,13 @@ def finalize_bundle(
     title: str,
     edited_slides: Optional[List[Dict[str, Any]]] = None,
     subtitle: str = "",
+    out_root: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Build the mp4maker bundle from the (possibly edited) review slides."""
+    """Build the mp4maker bundle from the (possibly edited) review slides.
+
+    out_root: where to create `_assets/chNN_bundle/`. Defaults to the job's
+    private data dir; pass e.g. 'D:\\00work\\260602-tech-historybook150' to write
+    straight into a mediaforge/mp4maker project so it picks the bundle up."""
     src = edited_slides if edited_slides is not None else job.result.get("slides", [])
     slides: List[Slide] = []
     image_paths: List[Optional[str]] = []
@@ -211,9 +216,10 @@ def finalize_bundle(
         ip = page_image_path(job, idx) if idx else None
         image_paths.append(str(ip) if ip else None)
 
-    out_root = str(DATA_ROOT / job.id / "bundle")
+    root = (out_root or "").strip() or str(DATA_ROOT / job.id / "bundle")
+    Path(root).mkdir(parents=True, exist_ok=True)
     result = bundle_builder.build_bundle(
-        out_root, chapter=chapter, title=title, slides=slides,
+        root, chapter=chapter, title=title, slides=slides,
         image_paths=image_paths, subtitle=subtitle,
     )
     problems = bundle_builder.validate_bundle(result.bundle_dir)

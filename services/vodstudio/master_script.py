@@ -51,6 +51,20 @@ _TITLE_RE = _label_regex(_LABELS["title"])
 _SCREEN_RE = _label_regex(_LABELS["screen_text"])
 _NARR_RE = _label_regex(_LABELS["narration"])
 
+# Header-style slide boundary: a line that is essentially just "슬라이드 1",
+# "**슬라이드 1**", "## 슬라이드 1", "Slide 1", "페이지 1:" — i.e. the keyword +
+# a number and nothing else. This is the form Gemini/ChatGPT usually emit, as
+# opposed to the labeled "슬라이드 번호: 1" form.
+_SLIDE_HEADER_RE = re.compile(
+    r"^\s*[#>*_\s]*(?:슬라이드|slide|페이지|page)\s*0*(\d+)\s*[*_]*\s*[:：.)]?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _clean(value: str) -> str:
+    """Strip surrounding markdown emphasis (**bold**, _italic_) from a label value."""
+    return (value or "").strip().strip("*_ ").strip()
+
 
 def parse_master_script(text: str) -> List[Slide]:
     """Parse the 2단계 output into ordered Slides.
@@ -72,6 +86,15 @@ def parse_master_script(text: str) -> List[Slide]:
         line = raw.rstrip()
         if not line.strip():
             # blank line ends the current free-text run but keeps the slide open
+            active_field = None
+            continue
+
+        # Header-style boundary first ("슬라이드 1", "**슬라이드 1**", "Slide 1").
+        mh = _SLIDE_HEADER_RE.match(line)
+        if mh:
+            if has_content(current):
+                slides.append(current)  # type: ignore[arg-type]
+            current = Slide(number=int(mh.group(1)))
             active_field = None
             continue
 
@@ -97,7 +120,7 @@ def parse_master_script(text: str) -> List[Slide]:
             if m:
                 if current is None:
                     current = Slide(number=len(slides) + 1)
-                setattr(current, field_name, m.group(1).strip())
+                setattr(current, field_name, _clean(m.group(1)))
                 active_field = field_name
                 matched_field = True
                 break

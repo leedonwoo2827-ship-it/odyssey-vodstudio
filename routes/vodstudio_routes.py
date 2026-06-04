@@ -59,6 +59,7 @@ class BuildBundleRequest(BaseModel):
     title: str = "VOD Studio Deck"
     subtitle: str = ""
     slides: Optional[List[SlideEdit]] = None
+    output_dir: Optional[str] = None   # 예: D:\00work\260602-tech-historybook150 (→ _assets\chNN_bundle\)
 
 
 class RenderRequest(BaseModel):
@@ -227,6 +228,7 @@ def setup_vodstudio_routes() -> APIRouter:
             payload = orchestrator.finalize_bundle(
                 job, chapter=body.chapter, title=body.title,
                 subtitle=body.subtitle, edited_slides=edited,
+                out_root=body.output_dir,
             )
         except Exception as e:  # noqa: BLE001
             raise HTTPException(500, f"Bundle build failed: {e}")

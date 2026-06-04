@@ -66,13 +66,28 @@
     background:var(--bg); color:var(--muted); cursor:pointer; text-align:center; transition:all .15s; }
   .filebox:hover, .filebox.drag { border-color:var(--accent); color:var(--fg); background:var(--panel2); }
   .filebox.has-file { border-style:solid; border-color:var(--accent2); color:var(--accent2); }
+  .logo-ic { font-size:1.3rem; }
+  .stepper { display:flex; align-items:center; gap:.4rem; margin-left:1rem; font-size:.85rem; }
+  .stepper .step { color:var(--muted); padding:.2rem .55rem; border-radius:999px; border:1px solid transparent; }
+  .stepper .step.active { color:#fff; background:var(--accent); }
+  .stepper .step.done { color:var(--accent2); border-color:var(--accent2); }
+  .stepper .sep { color:var(--border); }
+  @media (max-width:720px){ .stepper{display:none;} }
 </style>
 </head>
 <body>
 <header>
-  <span class="step-num" style="background:var(--accent2)">▶</span>
-  <h1>영상공방 <span class="hint">· NotebookLM → 슬라이드/대본 → mp4maker 번들</span></h1>
-  <span id="nlmBadge" class="badge">NotebookLM: 확인 중…</span>
+  <span class="logo-ic">🎬</span>
+  <h1>영상공방</h1>
+  <nav class="stepper" id="stepper">
+    <span class="step active" data-step="script">① 대본</span>
+    <span class="sep">—</span>
+    <span class="step" data-step="images">② 이미지</span>
+    <span class="sep">—</span>
+    <span class="step" data-step="bundle">③ 번들</span>
+    <span class="sep">—</span>
+    <span class="step" data-step="video">④ 영상</span>
+  </nav>
   <span style="flex:1"></span>
   <button id="gearBtn" class="iconbtn" title="설정 / 구글 로그인" aria-label="설정">⚙</button>
   <a href="/" class="pill">← 메인</a>
@@ -97,11 +112,6 @@
       </div>
       <button id="nlmRecheck" class="secondary">다시 확인</button>
     </div>
-  </div>
-
-  <div class="modebar">
-    <button id="modeManual" class="modebtn active">직접 입력 (수동 · 키 없음)</button>
-    <button id="modeAuto" class="modebtn">NotebookLM 자동</button>
   </div>
 
   <div id="autoMode" class="hidden">
@@ -192,9 +202,12 @@
     <h2><span class="step-num">4</span> 검수 &amp; 번들</h2>
     <div id="warnings"></div>
     <div class="row" style="max-width:640px">
-      <div><label>chapter 번호</label><input id="chapter" type="number" value="1" min="1"></div>
+      <div><label>chapter 번호</label><input id="chapter" type="number" value="2" min="1"></div>
       <div><label>번들 제목</label><input id="bundleTitle" value="VOD Studio Deck"></div>
     </div>
+    <label>출력 폴더 (선택) — 이 폴더 아래에 <code>_assets\chNN_bundle\</code> 가 생성됩니다</label>
+    <input id="outputDir" placeholder="예: D:\00work\260602-tech-historybook150  (비우면 앱 내부에 저장)">
+    <p class="hint">mediaforge/mp4maker 프로젝트 폴더를 넣으면 <code>script\chNN_script.json</code> 과 <code>images\</code> 가 바로 거기에 생성돼요.</p>
     <p class="hint">각 슬라이드의 <b>대본</b>(SuperTonic3에 넣을 텍스트)을 확인·수정하세요. 추출 텍스트는 화면 텍스트 검수용입니다.</p>
     <div id="slides" class="slides"></div>
     <div class="toolbar" style="margin-top:1.2rem">
