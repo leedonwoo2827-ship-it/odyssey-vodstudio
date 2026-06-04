@@ -85,6 +85,14 @@ function genRenderCode() {
   $("rcOut").style.display = "block";
   $("rcCopyBtn").classList.remove("hidden");
 }
+async function copyScript() {
+  const t = $("manualScript").value;
+  if (!t.trim()) { $("copyScriptStatus").textContent = "대본이 비어 있어요."; return; }
+  try { await navigator.clipboard.writeText(t); }
+  catch (e) { $("manualScript").select(); document.execCommand("copy"); }
+  $("copyScriptStatus").textContent = "✓ 복사됨 — NotebookLM [+ 소스 추가 → 복사된 텍스트]에 붙여넣기";
+  setTimeout(() => { $("copyScriptStatus").textContent = ""; }, 4000);
+}
 async function copyRenderCode() {
   try { await navigator.clipboard.writeText($("rcOut").value); $("rcCopyBtn").textContent = "✓ 복사됨"; }
   catch (e) { $("rcOut").select(); document.execCommand("copy"); $("rcCopyBtn").textContent = "✓ 복사됨"; }
@@ -299,6 +307,7 @@ on("nextImages", "click", () => showTab("images"));
 on("nextAudio", "click", () => showTab("audio"));
 on("nextVideo", "click", () => showTab("video"));
 on("genBtn", "click", genScript);
+on("copyScriptBtn", "click", copyScript);
 on("rcGenBtn", "click", genRenderCode);
 on("rcCopyBtn", "click", copyRenderCode);
 on("saveBtn", "click", saveBundle);

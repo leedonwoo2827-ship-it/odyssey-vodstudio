@@ -137,6 +137,11 @@
       </div>
       <label style="margin-top:.6rem">대본 (수정 가능 · 직접 붙여넣기 OK · 빈 줄 = 슬라이드 구분)</label>
       <textarea id="manualScript" style="min-height:240px" placeholder="**슬라이드 1**&#10;제목: ...&#10;상세 대본: ...&#10;&#10;(또는 문단별로 붙여넣기 — 문단 = 슬라이드 1장)"></textarea>
+      <div class="toolbar" style="margin-top:.5rem">
+        <button id="copyScriptBtn" class="secondary">📋 대본 전체 복사 (NotebookLM 소스로 붙여넣기)</button>
+        <span id="copyScriptStatus" class="hint"></span>
+      </div>
+      <p class="hint">💡 <b>상세 대본</b>이 ③ 음성/자막에서 <b>SuperTonic3가 읽는 목소리 대본</b>이 됩니다. (화면 텍스트는 슬라이드용)</p>
     </div>
 
     <div class="card">
