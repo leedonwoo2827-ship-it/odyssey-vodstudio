@@ -129,6 +129,7 @@ _TIMEOUT_EXEMPT_PREFIXES = (
     "/api/cookbook/setup",  # remote pacman/apt installs
     "/api/upload",          # large files
     "/api/image",           # diffusion proxies (inpaint/harmonize/upscale/etc.) — own 120s httpx timeout
+    "/api/vodstudio",       # 영상공방: Gemini 대본 생성·PDF처리·NotebookLM·mp4maker 렌더는 분 단위
 )
 
 
