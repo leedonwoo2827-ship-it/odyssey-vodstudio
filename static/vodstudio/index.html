@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>영상공방 — VOD Studio</title>
+<style>
+  :root {
+    --bg:#0f1115; --panel:#171a21; --panel2:#1f2530; --fg:#e6edf3; --muted:#9aa7b4;
+    --border:#2a313c; --accent:#4f8cff; --accent2:#34a853; --warn:#e0a030; --err:#e0556b;
+    --radius:10px;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:'Segoe UI',-apple-system,'Malgun Gothic',sans-serif; line-height:1.5; }
+  a { color:var(--accent); }
+  header { display:flex; align-items:center; gap:.8rem; padding:1rem 1.5rem; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg); z-index:5; }
+  header h1 { font-size:1.15rem; margin:0; font-weight:700; }
+  .badge { font-size:.78rem; padding:.2rem .6rem; border-radius:999px; border:1px solid var(--border); color:var(--muted); }
+  .badge.ok { color:var(--accent2); border-color:var(--accent2); }
+  .badge.no { color:var(--err); border-color:var(--err); }
+  main { max-width:1100px; margin:0 auto; padding:1.5rem; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:1.2rem 1.3rem; margin-bottom:1.2rem; }
+  .card h2 { font-size:1rem; margin:0 0 .9rem; display:flex; align-items:center; gap:.5rem; }
+  .step-num { display:inline-flex; width:1.5rem; height:1.5rem; align-items:center; justify-content:center; background:var(--accent); color:#fff; border-radius:50%; font-size:.8rem; font-weight:700; }
+  label { display:block; font-size:.82rem; color:var(--muted); margin:.7rem 0 .25rem; }
+  input, select, textarea { width:100%; background:var(--bg); color:var(--fg); border:1px solid var(--border); border-radius:8px; padding:.5rem .65rem; font-size:.9rem; font-family:inherit; }
+  textarea { resize:vertical; min-height:64px; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
+  .row3 { display:grid; grid-template-columns:repeat(3,1fr); gap:.8rem; }
+  .check { display:flex; align-items:center; gap:.5rem; margin-top:.8rem; }
+  .check input { width:auto; }
+  button { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:.6rem 1.1rem; font-size:.9rem; font-weight:600; cursor:pointer; }
+  button.secondary { background:var(--panel2); border:1px solid var(--border); color:var(--fg); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .hint { font-size:.8rem; color:var(--muted); }
+  .bar { height:8px; background:var(--panel2); border-radius:999px; overflow:hidden; margin:.5rem 0; }
+  .bar > div { height:100%; background:var(--accent); width:0%; transition:width .3s; }
+  .logs { font-family:ui-monospace,Consolas,monospace; font-size:.78rem; color:var(--muted); background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:.6rem; max-height:160px; overflow:auto; white-space:pre-wrap; }
+  .warn { color:var(--warn); font-size:.85rem; }
+  .err { color:var(--err); }
+  .slides { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; }
+  .slide { background:var(--panel2); border:1px solid var(--border); border-radius:var(--radius); padding:.8rem; }
+  .slide img { width:100%; border-radius:6px; border:1px solid var(--border); background:#000; display:block; }
+  .slide .idx { font-size:.78rem; color:var(--muted); margin:.4rem 0; }
+  .slide details { margin-top:.5rem; }
+  .slide summary { font-size:.78rem; color:var(--muted); cursor:pointer; }
+  .slide pre { font-size:.72rem; white-space:pre-wrap; color:var(--muted); max-height:120px; overflow:auto; }
+  .hidden { display:none; }
+  .toolbar { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+  .pill { font-size:.78rem; color:var(--muted); }
+  code { background:var(--bg); padding:.1rem .3rem; border-radius:4px; }
+  .iconbtn { width:34px; height:34px; padding:0; border-radius:8px; background:var(--panel2); border:1px solid var(--border); color:var(--fg); font-size:1.05rem; cursor:pointer; }
+  .iconbtn:hover { background:var(--border); }
+  .settings-panel { position:fixed; top:60px; right:1.2rem; width:380px; max-width:92vw; z-index:20;
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:1rem 1.1rem;
+    box-shadow:0 12px 40px rgba(0,0,0,.45); }
+  .settings-panel h3 { margin:0 0 .8rem; font-size:.95rem; }
+  .set-row { display:flex; align-items:flex-start; justify-content:space-between; gap:.8rem; padding:.7rem 0; border-top:1px solid var(--border); }
+  .set-row:first-of-type { border-top:none; }
+  .set-row button { white-space:nowrap; }
+</style>
+</head>
+<body>
+<header>
+  <span class="step-num" style="background:var(--accent2)">▶</span>
+  <h1>영상공방 <span class="hint">· NotebookLM → 슬라이드/대본 → mp4maker 번들</span></h1>
+  <span id="nlmBadge" class="badge">NotebookLM: 확인 중…</span>
+  <span style="flex:1"></span>
+  <button id="gearBtn" class="iconbtn" title="설정 / 구글 로그인" aria-label="설정">⚙</button>
+  <a href="/" class="pill">← 메인</a>
+</header>
+
+<main>
+  <!-- 설정 패널 (⚙) — 구글 로그인은 강제하지 않고 여기서 선택적으로 한다 -->
+  <div id="settingsPanel" class="settings-panel hidden">
+    <h3>설정</h3>
+    <div class="set-row">
+      <div>
+        <b>Google 계정 로그인</b> <span class="hint">(앱 로그인 · 선택)</span>
+        <div id="appLoginStatus" class="hint">상태 확인 중…</div>
+      </div>
+      <button id="googleLoginBtn" class="secondary">Google로 로그인</button>
+    </div>
+    <div class="set-row">
+      <div>
+        <b>NotebookLM 연결</b>
+        <div id="nlmStatusLine" class="hint">확인 중…</div>
+        <div class="hint">터미널에서 <code>nlm login</code> 후 '다시 확인'. (1·2단계 슬라이드/대본 생성에만 필요 — 번들·렌더는 불필요)</div>
+      </div>
+      <button id="nlmRecheck" class="secondary">다시 확인</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="step-num">1</span> 노트북 선택</h2>
+    <div class="toolbar">
+      <select id="notebook" style="max-width:560px"><option value="">— 노트북을 불러오세요 —</option></select>
+      <button class="secondary" id="loadNotebooks">목록 새로고침</button>
+    </div>
+    <p class="hint">회사 자산을 드래그해 둔 NotebookLM 노트북을 고릅니다.</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="step-num">2</span> 생성 설정</h2>
+    <div class="row3">
+      <div><label>총 슬라이드 수 (~40/~60)</label><input id="totalPages" type="number" value="40" min="4" max="120"></div>
+      <div><label>청크 크기 (분할 호출 단위)</label><input id="chunkSize" type="number" value="20" min="5" max="40"></div>
+      <div><label>언어 (BCP-47)</label><input id="language" value="ko"></div>
+    </div>
+    <div class="row">
+      <div><label>타겟 청중</label><input id="targetAudience" value="중소기업 CEO" placeholder="예: 4060 지식창업자, 기업 CEO"></div>
+      <div><label>발표 목적</label><input id="objective" value="정보 전달" placeholder="예: 투자 유치, 교육, 제안서"></div>
+    </div>
+    <div class="row">
+      <div><label>슬라이드 포맷</label>
+        <select id="fmt"><option value="detailed_deck">detailed_deck</option><option value="presenter_slides">presenter_slides</option></select></div>
+      <div><label>길이</label>
+        <select id="length"><option value="default">default</option><option value="short">short</option></select></div>
+    </div>
+    <label>디자인 시스템 프롬프트 (1단계 결과 · 선택)</label>
+    <textarea id="designSystem" placeholder="영문 [Adaptive Presentation Design System] 프롬프트를 붙여넣으면 모든 슬라이드에 적용됩니다. 비워두면 NotebookLM 기본 스타일."></textarea>
+    <div class="check"><input type="checkbox" id="addSource" checked><label style="margin:0">마스터 대본을 노트북 소스로 추가 (슬라이드 1:1 매칭 정확도 ↑)</label></div>
+    <div class="toolbar" style="margin-top:1rem">
+      <button id="startBtn" disabled>슬라이드+대본 생성 시작</button>
+      <span class="hint">대본(2단계) → 20장 분할 렌더(3단계) → PDF 병합 → 검수 준비까지 자동 진행됩니다.</span>
+    </div>
+  </div>
+
+  <div id="progressCard" class="card hidden">
+    <h2><span class="step-num">3</span> 진행 상황 <span id="stage" class="pill"></span></h2>
+    <div class="bar"><div id="barFill"></div></div>
+    <div id="logs" class="logs"></div>
+  </div>
+
+  <div id="reviewCard" class="card hidden">
+    <h2><span class="step-num">4</span> 검수 &amp; 번들</h2>
+    <div id="warnings"></div>
+    <div class="row" style="max-width:640px">
+      <div><label>chapter 번호</label><input id="chapter" type="number" value="1" min="1"></div>
+      <div><label>번들 제목</label><input id="bundleTitle" value="VOD Studio Deck"></div>
+    </div>
+    <p class="hint">각 슬라이드의 <b>대본</b>(SuperTonic3에 넣을 텍스트)을 확인·수정하세요. 추출 텍스트는 화면 텍스트 검수용입니다.</p>
+    <div id="slides" class="slides"></div>
+    <div class="toolbar" style="margin-top:1.2rem">
+      <button id="buildBtn">mp4maker 번들 생성</button>
+      <a id="downloadLink" class="hidden" href="#"><button class="secondary" type="button">번들 ZIP 다운로드</button></a>
+    </div>
+    <div id="bundleResult" style="margin-top:1rem"></div>
+  </div>
+
+  <div id="renderCard" class="card hidden">
+    <h2><span class="step-num">5</span> 영상 렌더 (mp4maker)</h2>
+    <div id="audioStatus" class="hint">오디오 상태 확인 중…</div>
+    <div class="row" style="max-width:640px; margin-top:.5rem">
+      <div><label>모드</label>
+        <select id="renderMode">
+          <option value="silent">무음 미리보기 (대본 길이만큼 무음 — SuperTonic3 전)</option>
+          <option value="voiced">음성 포함 (audio/ 에 WAV를 직접 넣은 경우)</option>
+        </select></div>
+      <div><label>해상도</label>
+        <select id="resolution">
+          <option value="1280x720">1280x720 (빠른 미리보기)</option>
+          <option value="1920x1080">1920x1080 (full)</option>
+        </select></div>
+    </div>
+    <p class="hint">무음 미리보기: 슬라이드 + Ken Burns + 자막(대본)으로 영상이 어떻게 나오는지 바로 확인.
+       음성 포함: <code>audio\chNN_XX_narration.wav</code> 를 채운 뒤 선택하세요.</p>
+    <div class="toolbar" style="margin-top:.6rem">
+      <button id="renderBtn">영상 렌더 시작</button>
+      <a id="videoLink" class="hidden" href="#" target="_blank"><button class="secondary" type="button">영상 새 탭에서 열기</button></a>
+    </div>
+    <div class="bar" id="renderBar" style="display:none"><div id="renderBarFill" style="background:var(--accent2)"></div></div>
+    <div id="renderLogs" class="logs hidden" style="margin-top:.6rem"></div>
+    <video id="player" class="hidden" controls style="width:100%; margin-top:.8rem; border:1px solid var(--border); border-radius:8px; background:#000"></video>
+  </div>
+</main>
+
+<script type="module" src="/static/vodstudio/app.js"></script>
+</body>
+</html>
