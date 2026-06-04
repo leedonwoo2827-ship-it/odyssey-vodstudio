@@ -46,8 +46,15 @@ async def _run(args: List[str], *, stdin_text: Optional[str] = None, timeout: fl
             "`gemini` CLI가 설치되어 있지 않습니다. Node.js 설치 후 "
             "`npm i -g @google/gemini-cli` 그리고 `gemini` 로 구글 로그인하세요."
         )
+    # Windows: npm installs `gemini.cmd`, and CreateProcess can't exec a .cmd/.bat
+    # directly — must go through cmd.exe. Prompt is passed via stdin (below), so
+    # there are no multi-line-arg quoting issues through cmd /c.
+    if os.name == "nt" and exe.lower().endswith((".cmd", ".bat")):
+        cmd = ["cmd", "/c", exe, *args]
+    else:
+        cmd = [exe, *args]
     proc = await asyncio.create_subprocess_exec(
-        exe, *args,
+        *cmd,
         stdin=asyncio.subprocess.PIPE if stdin_text is not None else None,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -81,10 +88,13 @@ async def generate(prompt: str, *, model: Optional[str] = None, timeout: float =
 
     인증 만료/미로그인 등은 stderr로 드러나며 GeminiCliError로 변환한다.
     """
-    args = ["-p", prompt]
+    # Pass the (multi-line) prompt via stdin rather than -p, so it survives the
+    # Windows `cmd /c` hop without quoting/newline breakage. Gemini CLI runs
+    # once on piped stdin and exits (non-interactive).
+    args: List[str] = []
     if model:
         args += ["-m", model]
-    rc, out, err = await _run(args, timeout=timeout)
+    rc, out, err = await _run(args, stdin_text=prompt, timeout=timeout)
     text = (out or "").strip()
     if rc != 0 or not text:
         blob = (out + "\n" + err).lower()
