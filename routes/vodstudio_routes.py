@@ -154,6 +154,45 @@ def setup_vodstudio_routes() -> APIRouter:
             raise HTTPException(502, str(e))
         return {"script": text}
 
+    @router.post("/gemini/from-pdf")
+    async def gemini_from_pdf(
+        request: Request,
+        pdf: UploadFile = File(...),
+        total_pages: int = Form(40),
+        target_audience: str = Form("일반 청중"),
+        objective: str = Form("정보 전달"),
+        extra: str = Form(""),
+    ):
+        """첨부 PDF의 텍스트를 추출 → 그 내용을 소스로 Gemini가 마스터 대본 생성."""
+        _owner(request)
+        if not gemini.available():
+            raise HTTPException(503, "gemini CLI 미설치 — Node + `npm i -g @google/gemini-cli` 후 `gemini` 로그인")
+        import tempfile
+        from services.vodstudio import pdf_tools
+        data = await pdf.read()
+        tmp = Path(tempfile.gettempdir()) / f"vod_src_{abs(hash(data)) % 10**8}.pdf"
+        tmp.write_bytes(data)
+        try:
+            source_text = await asyncio.to_thread(pdf_tools.extract_text, str(tmp))
+        finally:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+        if not source_text.strip():
+            raise HTTPException(400, "PDF에서 텍스트를 추출하지 못했습니다(스캔 이미지 PDF일 수 있음).")
+        prompt = (
+            vod_prompts.master_script_prompt(total_pages, target_audience, objective)
+            + "\n\n## 소스 내용 (이 내용을 근거로 작성)\n" + source_text
+            + (f"\n\n## 추가 지시\n{extra}" if extra.strip() else "")
+            + "\n\n위 소스 내용을 바탕으로 위 형식에 맞춰 한국어로 작성하라."
+        )
+        try:
+            text = await gemini.generate(prompt)
+        except gemini.GeminiCliError as e:
+            raise HTTPException(502, str(e))
+        return {"script": text, "source_chars": len(source_text)}
+
     @router.get("/jobs")
     async def list_jobs(request: Request):
         owner = _owner(request)

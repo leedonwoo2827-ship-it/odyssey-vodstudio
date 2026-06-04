@@ -39,6 +39,23 @@ def merge_pdfs(pdf_paths: List[str], out_path: str) -> str:
     return out_path
 
 
+def extract_text(pdf_path: str, *, max_chars: int = 20000) -> str:
+    """Concatenate the text of all pages (for feeding an LLM as source).
+
+    Capped at max_chars to keep LLM token/quota use sane on big PDFs — the
+    caller notes when truncation happened."""
+    parts: List[str] = []
+    with fitz.open(pdf_path) as doc:
+        for i, page in enumerate(doc, start=1):
+            t = page.get_text("text").strip()
+            if t:
+                parts.append(f"[p{i}] {t}")
+    text = "\n\n".join(parts).strip()
+    if len(text) > max_chars:
+        text = text[:max_chars] + "\n\n…(이하 생략)"
+    return text
+
+
 def render_pages(pdf_path: str, out_dir: str, *, dpi: int = 150, prefix: str = "page") -> List[PageRender]:
     """Render each PDF page to a PNG and extract its text.
 

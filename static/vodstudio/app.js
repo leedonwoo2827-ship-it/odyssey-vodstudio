@@ -399,7 +399,32 @@ async function genScript() {
   }
 }
 
+// ---- generate script directly from the attached PDF (read its text → Gemini) ----
+async function genFromPdf() {
+  const f = $("manualPdf").files[0];
+  if (!f) { alert("먼저 위에 PDF를 첨부하세요."); return; }
+  $("fromPdfBtn").disabled = true;
+  $("fromPdfStatus").textContent = "PDF 읽고 Gemini로 대본 생성 중… (처음엔 구글 로그인 창이 뜰 수 있어요)";
+  try {
+    const fd = new FormData();
+    fd.append("pdf", f);
+    fd.append("total_pages", String(parseInt($("gTotal").value, 10) || 40));
+    fd.append("target_audience", $("gAudience").value.trim());
+    fd.append("objective", $("gObjective").value.trim());
+    const res = await fetch(API + "/gemini/from-pdf", { method: "POST", credentials: "same-origin", body: fd });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || "생성 실패");
+    $("manualScript").value = d.script || "";
+    $("fromPdfStatus").textContent = `완료 (소스 ${d.source_chars || 0}자) — 아래 대본 확인 후 [검수 준비]`;
+  } catch (e) {
+    $("fromPdfStatus").textContent = "실패: " + e.message;
+  } finally {
+    $("fromPdfBtn").disabled = false;
+  }
+}
+
 // ---- wiring ----
+$("fromPdfBtn").addEventListener("click", genFromPdf);
 $("modeManual").addEventListener("click", () => setMode("manual"));
 $("modeAuto").addEventListener("click", () => setMode("auto"));
 $("manualBtn").addEventListener("click", manualBuild);

@@ -143,34 +143,38 @@
 
   <div id="manualMode">
     <div class="card">
-      <h2><span class="step-num">1</span> 대본 + 슬라이드 직접 입력 <span class="hint">· 키 없음 · 로컬</span></h2>
+      <h2><span class="step-num">1</span> 파일 첨부 <span class="hint">· 이 PDF가 슬라이드 이미지 + 대본 소스가 됩니다</span></h2>
+      <label id="pdfDrop" class="filebox" style="min-height:110px">
+        <input id="manualPdf" type="file" accept="application/pdf" hidden>
+        <span id="pdfBoxText">📎 여기를 클릭해서 PDF 첨부  (또는 파일을 끌어다 놓기)</span>
+      </label>
+      <div class="toolbar" style="margin-top:.7rem">
+        <button id="fromPdfBtn">📄 첨부 PDF 내용으로 Gemini 대본 생성</button>
+        <span class="badge" id="geminiBadge">확인 중…</span>
+        <span id="fromPdfStatus" class="hint"></span>
+      </div>
+      <p class="hint">첨부한 PDF의 글을 읽어 Gemini(구글 로그인·키 없음)가 슬라이드별 대본으로 만들어 아래 대본칸에 채웁니다. PDF는 슬라이드 이미지로도 쓰입니다.</p>
 
-      <div class="card" style="background:var(--panel2); margin:0 0 1rem">
-        <b>Gemini로 대본 생성</b> <span id="geminiBadge" class="badge">확인 중…</span>
-        <p class="hint">구글 계정으로 로그인한 <code>gemini</code> CLI로 대본 초안을 만듭니다 (API 키 없음). 만든 글은 아래 대본칸에 채워져요.</p>
-        <div class="row3">
+      <details style="margin-top:.6rem">
+        <summary class="hint">대신 ‘주제만 입력’해서 생성하기 (PDF 없이)</summary>
+        <div class="row3" style="margin-top:.6rem">
           <div><label>총 슬라이드 수</label><input id="gTotal" type="number" value="40" min="4" max="120"></div>
           <div><label>타겟 청중</label><input id="gAudience" value="중소기업 CEO"></div>
           <div><label>발표 목적</label><input id="gObjective" value="정보 전달"></div>
         </div>
         <label>주제 / 소스 요약</label>
-        <textarea id="gTopic" placeholder="영상으로 만들 주제·핵심 내용을 적으면 Gemini가 슬라이드별 대본으로 구성합니다."></textarea>
+        <textarea id="gTopic" placeholder="주제: ...&#10;다룰 내용:&#10;- 항목 1&#10;- 항목 2"></textarea>
         <div class="toolbar" style="margin-top:.5rem">
-          <button id="genScriptBtn" class="secondary">Gemini로 대본 생성</button>
+          <button id="genScriptBtn" class="secondary">주제로 Gemini 대본 생성</button>
           <span id="genScriptStatus" class="hint"></span>
         </div>
-      </div>
+      </details>
+    </div>
 
-      <label>대본 (NotebookLM/ChatGPT/Gemini에서 만든 텍스트를 붙여넣기)</label>
-      <textarea id="manualScript" style="min-height:200px" placeholder="슬라이드 번호: 1&#10;제목: ...&#10;상세 대본: ...&#10;&#10;(또는 그냥 문단별로 붙여넣어도 됩니다 — 문단 = 슬라이드 1장)"></textarea>
-
-      <label style="margin-top:1rem">슬라이드 PDF 업로드 (NotebookLM/PPTX→PDF 등 · 선택)</label>
-      <label id="pdfDrop" class="filebox">
-        <input id="manualPdf" type="file" accept="application/pdf" hidden>
-        <span id="pdfBoxText">📄 여기를 클릭해서 PDF 선택  (또는 파일을 끌어다 놓기)</span>
-      </label>
-      <p class="hint">PDF를 올리면 페이지별 이미지로 변환해 슬라이드로 씁니다. 없으면 이미지 없이 대본만 번들에 들어갑니다.</p>
-
+    <div class="card">
+      <h2><span class="step-num">2</span> 대본 확인 / 수정</h2>
+      <p class="hint">위에서 생성되면 자동으로 채워집니다. NotebookLM/ChatGPT/Gemini에서 만든 글을 직접 붙여넣어도 됩니다. (빈 줄 = 슬라이드 구분)</p>
+      <textarea id="manualScript" style="min-height:220px" placeholder="슬라이드 번호: 1&#10;제목: ...&#10;상세 대본: ...&#10;&#10;(또는 그냥 문단별로 붙여넣어도 됩니다 — 문단 = 슬라이드 1장)"></textarea>
       <div class="toolbar" style="margin-top:1rem">
         <button id="manualBtn">검수 준비</button>
         <span class="hint">대본 파싱 + PDF→이미지 → 검수 화면으로.</span>
