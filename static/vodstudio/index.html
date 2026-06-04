@@ -61,6 +61,11 @@
   .modebar { display:flex; gap:.5rem; margin-bottom:1.2rem; }
   .modebtn { background:var(--panel2); border:1px solid var(--border); color:var(--muted); border-radius:999px; padding:.5rem 1.1rem; font-size:.88rem; }
   .modebtn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .filebox { display:flex; align-items:center; justify-content:center; gap:.5rem; width:100%;
+    min-height:84px; padding:1rem; border:2px dashed var(--border); border-radius:10px;
+    background:var(--bg); color:var(--muted); cursor:pointer; text-align:center; transition:all .15s; }
+  .filebox:hover, .filebox.drag { border-color:var(--accent); color:var(--fg); background:var(--panel2); }
+  .filebox.has-file { border-style:solid; border-color:var(--accent2); color:var(--accent2); }
 </style>
 </head>
 <body>
@@ -159,8 +164,11 @@
       <label>대본 (NotebookLM/ChatGPT/Gemini에서 만든 텍스트를 붙여넣기)</label>
       <textarea id="manualScript" style="min-height:200px" placeholder="슬라이드 번호: 1&#10;제목: ...&#10;상세 대본: ...&#10;&#10;(또는 그냥 문단별로 붙여넣어도 됩니다 — 문단 = 슬라이드 1장)"></textarea>
 
-      <label style="margin-top:1rem">슬라이드 PDF 업로드 (NotebookLM에서 내려받은 슬라이드덱 · 선택)</label>
-      <input id="manualPdf" type="file" accept="application/pdf">
+      <label style="margin-top:1rem">슬라이드 PDF 업로드 (NotebookLM/PPTX→PDF 등 · 선택)</label>
+      <label id="pdfDrop" class="filebox">
+        <input id="manualPdf" type="file" accept="application/pdf" hidden>
+        <span id="pdfBoxText">📄 여기를 클릭해서 PDF 선택  (또는 파일을 끌어다 놓기)</span>
+      </label>
       <p class="hint">PDF를 올리면 페이지별 이미지로 변환해 슬라이드로 씁니다. 없으면 이미지 없이 대본만 번들에 들어갑니다.</p>
 
       <div class="toolbar" style="margin-top:1rem">

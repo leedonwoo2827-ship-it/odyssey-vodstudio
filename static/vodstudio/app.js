@@ -404,6 +404,24 @@ $("modeManual").addEventListener("click", () => setMode("manual"));
 $("modeAuto").addEventListener("click", () => setMode("auto"));
 $("manualBtn").addEventListener("click", manualBuild);
 $("genScriptBtn").addEventListener("click", genScript);
+
+// PDF upload: filename display + drag & drop
+(function wirePdf() {
+  const input = $("manualPdf"), box = $("pdfDrop"), text = $("pdfBoxText");
+  if (!input || !box) return;
+  function show() {
+    const f = input.files[0];
+    if (f) { text.textContent = "📄 " + f.name; box.classList.add("has-file"); }
+    else { text.textContent = "📄 여기를 클릭해서 PDF 선택  (또는 파일을 끌어다 놓기)"; box.classList.remove("has-file"); }
+  }
+  input.addEventListener("change", show);
+  ["dragenter", "dragover"].forEach(ev => box.addEventListener(ev, e => { e.preventDefault(); box.classList.add("drag"); }));
+  ["dragleave", "drop"].forEach(ev => box.addEventListener(ev, e => { e.preventDefault(); box.classList.remove("drag"); }));
+  box.addEventListener("drop", e => {
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) { const dt = new DataTransfer(); dt.items.add(f); input.files = dt.files; show(); }
+  });
+})();
 $("loadNotebooks").addEventListener("click", loadNotebooks);
 $("gearBtn").addEventListener("click", toggleSettings);
 $("nlmRecheck").addEventListener("click", async () => { if (await checkAuth()) loadNotebooks(); });
