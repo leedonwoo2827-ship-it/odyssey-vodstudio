@@ -10,13 +10,54 @@
 > `services/vodstudio/*`(3단계 워크플로우·검수·번들·mp4maker 렌더) · `routes/vodstudio_routes.py` ·
 > `static/vodstudio/*`(UI, `/vodstudio`). 설정/사용법은 [`knowledge/`](knowledge/) 폴더 참고.
 >
-> **빠른 시작:** `setup.bat` → (`venv\Scripts\nlm login`) → `run.bat` → http://127.0.0.1:7000/vodstudio
->
-> 아래는 베이스가 된 odysseus 원본 README.
+아래는 베이스가 된 odysseus 원본 README보다 먼저, **영상공방 설치/실행**을 정리한 것입니다.
+
+## ⚙ 설치 & 실행 (Windows)
+
+### 0. 사전 준비 — 터미널(PowerShell)에서 한 줄씩 (없는 것만)
+> `setup.bat` 누르기 전에 Python·git·ffmpeg 가 있어야 합니다. 이미 있으면 건너뛰세요.
+```powershell
+winget install Python.Python.3.12
+```
+```powershell
+winget install Git.Git
+```
+```powershell
+winget install Gyan.FFmpeg
+```
+설치 후 **새 터미널**을 열어 확인: `python --version` / `git --version` / `ffmpeg -version`
+
+### 1. 설치 & 실행 (더블클릭)
+1. **`setup.bat`** — venv·의존성 설치 + mp4maker 클론 + 환경 점검 (`.env` 자동 생성)
+2. **`run.bat`** — 웹 서버 실행, 브라우저가 `http://127.0.0.1:7000/vodstudio` 자동 오픈
+
+➡ **직접 입력(수동) 모드는 여기까지로 바로 사용** — 대본 붙여넣기 + 슬라이드 PDF 업로드 → 영상.
+**로그인·API 키 불필요.**
+
+### 2. (선택) Gemini CLI — API 키 없이 구글 로그인으로 대본 생성
+터미널에서 한 줄씩:
+```powershell
+winget install OpenJS.NodeJS.LTS
+```
+```powershell
+npm install -g @google/gemini-cli
+```
+```powershell
+gemini
+```
+(`gemini` 실행 시 브라우저로 **구글 계정 로그인** — API 키 입력 없음. 회사 Workspace 계정은 막힐 수 있어 개인 Gmail 권장.)
+
+### 3. (선택) NotebookLM 자동 모드
+```powershell
+venv\Scripts\nlm login
+```
+(크롬으로 구글 로그인 → 노트북에서 슬라이드/대본 자동 생성. 쿠키 2~4주 유지.)
+
+> 상세 가이드: [`knowledge/`](knowledge/) — google-oauth-setup · gemini-cli-setup · vodstudio-usage
 
 ---
 
-# Odysseus
+# Odysseus (원본 README)
 
 ```
 ───────────────────────────────────────────────
