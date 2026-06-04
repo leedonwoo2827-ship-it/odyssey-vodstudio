@@ -326,6 +326,84 @@ function escapeHtml(s) {
 }
 
 // ---- wire up ----
+// ---- mode toggle (manual / NotebookLM auto) ----
+let autoInited = false;
+function setMode(mode) {
+  const manual = mode === "manual";
+  $("manualMode").classList.toggle("hidden", !manual);
+  $("autoMode").classList.toggle("hidden", manual);
+  $("modeManual").classList.toggle("active", manual);
+  $("modeAuto").classList.toggle("active", !manual);
+  if (!manual && !autoInited) {
+    autoInited = true;
+    checkAuth().then(ok => { if (ok) loadNotebooks(); });
+  }
+}
+
+// ---- manual build (paste text + optional PDF) ----
+async function manualBuild() {
+  const text = $("manualScript").value.trim();
+  if (!text) { alert("대본 텍스트를 입력하세요."); return; }
+  $("manualBtn").disabled = true;
+  $("reviewCard").classList.add("hidden");
+  $("renderCard").classList.add("hidden");
+  try {
+    const fd = new FormData();
+    fd.append("script_text", text);
+    const f = $("manualPdf").files[0];
+    if (f) fd.append("pdf", f);
+    const res = await fetch(API + "/manual", { method: "POST", credentials: "same-origin", body: fd });
+    const job = await res.json();
+    if (!res.ok) throw new Error(job.detail || "검수 준비 실패");
+    currentJobId = job.id;
+    renderReview(job);
+    $("reviewCard").scrollIntoView({ behavior: "smooth" });
+  } catch (e) {
+    alert("오류: " + e.message);
+  } finally {
+    $("manualBtn").disabled = false;
+  }
+}
+
+// ---- Gemini CLI: generate script draft (no API key) ----
+async function checkGemini() {
+  const badge = $("geminiBadge");
+  try {
+    const s = await api("/gemini/status");
+    if (s.installed) { badge.textContent = "gemini 설치됨"; badge.className = "badge ok"; }
+    else { badge.textContent = "gemini 미설치"; badge.className = "badge no"; }
+  } catch (e) { badge.textContent = "확인 불가"; badge.className = "badge"; }
+}
+
+async function genScript() {
+  const topic = $("gTopic").value.trim();
+  if (!topic) { alert("주제/소스 요약을 입력하세요."); return; }
+  $("genScriptBtn").disabled = true;
+  $("genScriptStatus").textContent = "Gemini 생성 중… (구글 로그인 필요할 수 있음)";
+  try {
+    const r = await api("/gemini/script", {
+      method: "POST",
+      body: JSON.stringify({
+        topic,
+        total_pages: parseInt($("gTotal").value, 10) || 40,
+        target_audience: $("gAudience").value.trim(),
+        objective: $("gObjective").value.trim(),
+      }),
+    });
+    $("manualScript").value = r.script || "";
+    $("genScriptStatus").textContent = "완료 — 아래 대본칸을 확인/수정하세요.";
+  } catch (e) {
+    $("genScriptStatus").textContent = "실패: " + e.message;
+  } finally {
+    $("genScriptBtn").disabled = false;
+  }
+}
+
+// ---- wiring ----
+$("modeManual").addEventListener("click", () => setMode("manual"));
+$("modeAuto").addEventListener("click", () => setMode("auto"));
+$("manualBtn").addEventListener("click", manualBuild);
+$("genScriptBtn").addEventListener("click", genScript);
 $("loadNotebooks").addEventListener("click", loadNotebooks);
 $("gearBtn").addEventListener("click", toggleSettings);
 $("nlmRecheck").addEventListener("click", async () => { if (await checkAuth()) loadNotebooks(); });
@@ -334,6 +412,7 @@ $("startBtn").addEventListener("click", startJob);
 $("buildBtn").addEventListener("click", buildBundle);
 $("renderBtn").addEventListener("click", startRender);
 
-(async () => {
-  if (await checkAuth()) loadNotebooks();
-})();
+// default: manual mode (no NotebookLM/key required)
+setMode("manual");
+checkGemini();
+checkAuth();  // updates badge only; notebook list loads when auto mode opened

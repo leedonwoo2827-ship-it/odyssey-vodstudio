@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from services import notebooklm_service as nlm
 from services.vodstudio import bundle_builder, pdf_tools, prompts
 from services.vodstudio.jobs import Job, STATUS_REVIEW, STATUS_DONE
-from services.vodstudio.master_script import Slide, parse_master_script
+from services.vodstudio.master_script import Slide, parse_master_script, parse_or_split
 
 logger = logging.getLogger(__name__)
 
@@ -125,8 +125,15 @@ async def run_pipeline(job: Job) -> None:
     pages = pdf_tools.render_pages(merged, str(work / "imgs"), prefix="page")
 
     # 5) build review payload (zip slides <-> pages by position) ------------
+    job.result["merged_pdf"] = merged
+    _build_review_payload(job, slides, pages, design_system=design_system or "")
+
+
+def _build_review_payload(job: Job, slides: List[Slide], pages, design_system: str = "") -> None:
+    """Populate job.result with the review payload (slides zipped to page images)
+    and move the job into the review state. Shared by the NotebookLM and manual paths."""
     warnings: List[str] = []
-    if len(pages) != len(slides):
+    if pages and len(pages) != len(slides):
         warnings.append(
             f"슬라이드 대본 {len(slides)}개 vs 렌더된 페이지 {len(pages)}개 불일치 — 순서대로 매칭했습니다."
         )
@@ -142,19 +149,37 @@ async def run_pipeline(job: Job) -> None:
             "image_index": page.index if page else None,
             "extracted_text": page.text if page else "",
         })
-
     job.result.update({
         "design_system": design_system or "",
         "slide_count": len(slides),
-        "page_count": len(pages),
+        "page_count": len(pages) if pages else 0,
         "warnings": warnings,
         "slides": review_slides,
-        "page_image_count": len(pages),
-        "merged_pdf": merged,
     })
     job.set_stage("review", 0.9)
     job.status = STATUS_REVIEW
     job.log("검수 준비 완료 — 슬라이드/대본을 확인하고 번들을 생성하세요.")
+
+
+def build_from_manual(job: Job, script_text: str, pdf_path: Optional[str]) -> None:
+    """수동 모드: 사용자가 NotebookLM에서 직접 만든 대본 텍스트 + 슬라이드 PDF를
+    받아 검수 페이로드를 만든다. NotebookLM 자동화/LLM/키 전부 불필요."""
+    work = _work_dir(job)
+    job.set_stage("parse", 0.3)
+    slides = parse_or_split(script_text or "")
+    if not slides:
+        raise ValueError("대본 텍스트가 비어 있거나 파싱할 내용이 없습니다.")
+    job.log(f"대본에서 {len(slides)}개 슬라이드 파싱")
+
+    pages = []
+    if pdf_path and Path(pdf_path).exists():
+        job.set_stage("render-pages", 0.6)
+        pages = pdf_tools.render_pages(pdf_path, str(work / "imgs"), prefix="page")
+        job.log(f"PDF에서 {len(pages)}개 페이지 이미지 추출")
+    else:
+        job.log("슬라이드 PDF가 없어 이미지 없이 진행 (번들 생성 시 이미지 누락 경고)")
+
+    _build_review_payload(job, slides, pages)
 
 
 def page_image_path(job: Job, image_index: int) -> Optional[Path]:

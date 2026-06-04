@@ -12,13 +12,15 @@ import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from src.auth_helpers import require_user
 from services import notebooklm_service as nlm
+from services import gemini_cli_service as gemini
 from services.vodstudio import orchestrator, mp4_render
+from services.vodstudio import prompts as vod_prompts
 from services.vodstudio.jobs import JobManager
 
 logger = logging.getLogger(__name__)
@@ -95,6 +97,62 @@ def setup_vodstudio_routes() -> APIRouter:
         job = manager.create(owner, body.model_dump())
         manager.run(job, orchestrator.run_pipeline)
         return {"job_id": job.id, "status": job.status}
+
+    @router.post("/manual")
+    async def manual_build(
+        request: Request,
+        script_text: str = Form(...),
+        pdf: Optional[UploadFile] = File(None),
+    ):
+        """직접 입력 모드: NotebookLM에서 직접 만든 대본 텍스트(+슬라이드 PDF)를 받아
+        검수 단계까지 만든다. NotebookLM 자동화/LLM/API 키 불필요."""
+        owner = _owner(request)
+        if not (script_text or "").strip():
+            raise HTTPException(400, "대본 텍스트가 비어 있습니다")
+        job = manager.create(owner, {"mode": "manual"})
+        pdf_path = None
+        if pdf is not None:
+            work = orchestrator._work_dir(job)
+            pdf_path = str(work / "upload.pdf")
+            data = await pdf.read()
+            Path(pdf_path).write_bytes(data)
+        try:
+            await asyncio.to_thread(orchestrator.build_from_manual, job, script_text, pdf_path)
+        except Exception as e:  # noqa: BLE001
+            job.status = "error"; job.error = str(e)
+            raise HTTPException(400, str(e))
+        return job.to_public()
+
+    # ---- Gemini CLI (구글 로그인 · API 키 없음 · 무료 티어) ----
+    @router.get("/gemini/status")
+    async def gemini_status(request: Request):
+        _owner(request)
+        if not gemini.available():
+            return {"installed": False, "version": None}
+        return {"installed": True, "version": await gemini.version()}
+
+    class GeminiScriptRequest(BaseModel):
+        topic: str
+        total_pages: int = 40
+        target_audience: str = "일반 청중"
+        objective: str = "정보 전달"
+        model: Optional[str] = None
+
+    @router.post("/gemini/script")
+    async def gemini_script(body: GeminiScriptRequest, request: Request):
+        """Gemini CLI로 마스터 대본을 생성해 텍스트로 반환(수동 모드 입력칸 채우기용)."""
+        _owner(request)
+        if not gemini.available():
+            raise HTTPException(503, "gemini CLI 미설치 — Node + `npm i -g @google/gemini-cli` 후 `gemini` 로그인")
+        prompt = (
+            vod_prompts.master_script_prompt(body.total_pages, body.target_audience, body.objective)
+            + f"\n\n## 주제/소스 요약\n{body.topic}\n\n위 주제로 위 형식에 맞춰 한국어로 작성하라."
+        )
+        try:
+            text = await gemini.generate(prompt, model=body.model)
+        except gemini.GeminiCliError as e:
+            raise HTTPException(502, str(e))
+        return {"script": text}
 
     @router.get("/jobs")
     async def list_jobs(request: Request):

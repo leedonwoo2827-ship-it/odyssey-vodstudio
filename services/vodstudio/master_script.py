@@ -120,6 +120,32 @@ def parse_master_script(text: str) -> List[Slide]:
     return slides
 
 
+def slides_from_plain_text(text: str) -> List[Slide]:
+    """Fallback for pasted text that ISN'T in the labeled (슬라이드 번호/제목/대본)
+    format: split into blocks on blank lines and treat each block as one slide's
+    narration (first line becomes the title). Used by the manual paste mode.
+    """
+    blocks = [b.strip() for b in re.split(r"\n\s*\n", text or "") if b.strip()]
+    slides: List[Slide] = []
+    for i, block in enumerate(blocks, start=1):
+        lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+        title = lines[0][:80] if lines else f"Slide {i}"
+        slides.append(Slide(number=i, title=title, narration=block))
+    return slides
+
+
+def parse_or_split(text: str) -> List[Slide]:
+    """Use the labeled parser when the text looks structured; otherwise fall
+    back to plain-text block splitting. Lets the manual mode accept either the
+    NotebookLM 'Master Script' format or any pasted prose."""
+    slides = parse_master_script(text)
+    if len(slides) >= 2:
+        return slides
+    plain = slides_from_plain_text(text)
+    # Prefer whichever yielded more scenes (structured single-block stays as-is).
+    return plain if len(plain) > len(slides) else (slides or plain)
+
+
 def estimate_narration_seconds(text: str) -> int:
     """Rough Korean TTS duration estimate from character count.
 

@@ -58,6 +58,9 @@
   .set-row { display:flex; align-items:flex-start; justify-content:space-between; gap:.8rem; padding:.7rem 0; border-top:1px solid var(--border); }
   .set-row:first-of-type { border-top:none; }
   .set-row button { white-space:nowrap; }
+  .modebar { display:flex; gap:.5rem; margin-bottom:1.2rem; }
+  .modebtn { background:var(--panel2); border:1px solid var(--border); color:var(--muted); border-radius:999px; padding:.5rem 1.1rem; font-size:.88rem; }
+  .modebtn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
 </style>
 </head>
 <body>
@@ -91,6 +94,12 @@
     </div>
   </div>
 
+  <div class="modebar">
+    <button id="modeManual" class="modebtn active">직접 입력 (수동 · 키 없음)</button>
+    <button id="modeAuto" class="modebtn">NotebookLM 자동</button>
+  </div>
+
+  <div id="autoMode" class="hidden">
   <div class="card">
     <h2><span class="step-num">1</span> 노트북 선택</h2>
     <div class="toolbar">
@@ -123,6 +132,41 @@
     <div class="toolbar" style="margin-top:1rem">
       <button id="startBtn" disabled>슬라이드+대본 생성 시작</button>
       <span class="hint">대본(2단계) → 20장 분할 렌더(3단계) → PDF 병합 → 검수 준비까지 자동 진행됩니다.</span>
+    </div>
+  </div>
+  </div><!-- /autoMode -->
+
+  <div id="manualMode">
+    <div class="card">
+      <h2><span class="step-num">1</span> 대본 + 슬라이드 직접 입력 <span class="hint">· 키 없음 · 로컬</span></h2>
+
+      <div class="card" style="background:var(--panel2); margin:0 0 1rem">
+        <b>Gemini로 대본 생성</b> <span id="geminiBadge" class="badge">확인 중…</span>
+        <p class="hint">구글 계정으로 로그인한 <code>gemini</code> CLI로 대본 초안을 만듭니다 (API 키 없음). 만든 글은 아래 대본칸에 채워져요.</p>
+        <div class="row3">
+          <div><label>총 슬라이드 수</label><input id="gTotal" type="number" value="40" min="4" max="120"></div>
+          <div><label>타겟 청중</label><input id="gAudience" value="중소기업 CEO"></div>
+          <div><label>발표 목적</label><input id="gObjective" value="정보 전달"></div>
+        </div>
+        <label>주제 / 소스 요약</label>
+        <textarea id="gTopic" placeholder="영상으로 만들 주제·핵심 내용을 적으면 Gemini가 슬라이드별 대본으로 구성합니다."></textarea>
+        <div class="toolbar" style="margin-top:.5rem">
+          <button id="genScriptBtn" class="secondary">Gemini로 대본 생성</button>
+          <span id="genScriptStatus" class="hint"></span>
+        </div>
+      </div>
+
+      <label>대본 (NotebookLM/ChatGPT/Gemini에서 만든 텍스트를 붙여넣기)</label>
+      <textarea id="manualScript" style="min-height:200px" placeholder="슬라이드 번호: 1&#10;제목: ...&#10;상세 대본: ...&#10;&#10;(또는 그냥 문단별로 붙여넣어도 됩니다 — 문단 = 슬라이드 1장)"></textarea>
+
+      <label style="margin-top:1rem">슬라이드 PDF 업로드 (NotebookLM에서 내려받은 슬라이드덱 · 선택)</label>
+      <input id="manualPdf" type="file" accept="application/pdf">
+      <p class="hint">PDF를 올리면 페이지별 이미지로 변환해 슬라이드로 씁니다. 없으면 이미지 없이 대본만 번들에 들어갑니다.</p>
+
+      <div class="toolbar" style="margin-top:1rem">
+        <button id="manualBtn">검수 준비</button>
+        <span class="hint">대본 파싱 + PDF→이미지 → 검수 화면으로.</span>
+      </div>
     </div>
   </div>
 
