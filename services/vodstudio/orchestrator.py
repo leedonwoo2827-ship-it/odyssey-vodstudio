@@ -182,6 +182,43 @@ def build_from_manual(job: Job, script_text: str, pdf_path: Optional[str]) -> No
     _build_review_payload(job, slides, pages)
 
 
+def render_images_only(job: Job, pdf_path: Optional[str]):
+    """② 이미지 탭: 병합 PDF를 페이지별 이미지로 렌더만 한다(대본 없이). 미리보기용."""
+    work = _work_dir(job)
+    pages = pdf_tools.render_pages(pdf_path, str(work / "imgs"), prefix="page") if pdf_path else []
+    job.result["pages"] = [
+        {"index": p.index, "image_index": p.index, "extracted_text": p.text} for p in pages
+    ]
+    job.result["page_count"] = len(pages)
+    job.log(f"{len(pages)} 페이지 이미지 생성")
+    return pages
+
+
+def save_with_script(
+    job: Job, script_text: str, *,
+    chapter: int, title: str, out_root: Optional[str] = None, subtitle: str = "",
+) -> Dict[str, Any]:
+    """③ 저장: 대본 파싱 + (이미 렌더된) 이미지와 순서대로 매칭 → mediaforge 번들 저장."""
+    slides = parse_or_split(script_text or "")
+    if not slides:
+        raise ValueError("대본이 비어 있거나 파싱할 내용이 없습니다.")
+    pages = job.result.get("pages", [])
+    review: List[Dict[str, Any]] = []
+    for i, s in enumerate(slides):
+        pg = pages[i] if i < len(pages) else None
+        review.append({
+            "index": i + 1, "number": s.number, "title": s.title,
+            "screen_text": s.screen_text, "narration": s.narration,
+            "image_index": (pg["image_index"] if pg else None),
+            "extracted_text": (pg["extracted_text"] if pg else ""),
+        })
+    job.result["slides"] = review
+    job.result["slide_count"] = len(slides)
+    if pages and len(pages) != len(slides):
+        job.result["warnings"] = [f"대본 {len(slides)}개 vs 이미지 {len(pages)}개 불일치 — 순서대로 매칭"]
+    return finalize_bundle(job, chapter=chapter, title=title, out_root=out_root, subtitle=subtitle)
+
+
 def page_image_path(job: Job, image_index: int) -> Optional[Path]:
     """Resolve a rendered page PNG by 1-based index, for the image endpoint."""
     candidate = DATA_ROOT / job.id / "imgs" / f"page_{int(image_index):02d}.png"

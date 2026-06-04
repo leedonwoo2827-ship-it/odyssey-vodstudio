@@ -103,26 +103,78 @@ def setup_vodstudio_routes() -> APIRouter:
     async def manual_build(
         request: Request,
         script_text: str = Form(...),
-        pdf: Optional[UploadFile] = File(None),
+        pdfs: Optional[List[UploadFile]] = File(None),
     ):
-        """직접 입력 모드: NotebookLM에서 직접 만든 대본 텍스트(+슬라이드 PDF)를 받아
-        검수 단계까지 만든다. NotebookLM 자동화/LLM/API 키 불필요."""
+        """대본 텍스트 + 슬라이드 PDF 여러 개(순서대로)를 받아 검수 단계까지 만든다.
+        PDF들은 넣은 순서대로 병합되어 페이지가 1→N 으로 매겨진다(번호 로직)."""
         owner = _owner(request)
         if not (script_text or "").strip():
             raise HTTPException(400, "대본 텍스트가 비어 있습니다")
+        from services.vodstudio import pdf_tools
         job = manager.create(owner, {"mode": "manual"})
-        pdf_path = None
-        if pdf is not None:
-            work = orchestrator._work_dir(job)
-            pdf_path = str(work / "upload.pdf")
-            data = await pdf.read()
-            Path(pdf_path).write_bytes(data)
+        work = orchestrator._work_dir(job)
+        merged_path = None
+        saved = []
+        for i, up in enumerate(pdfs or []):
+            if up is None or not (up.filename or "").lower().endswith(".pdf"):
+                continue
+            p = work / f"slides_{i + 1:02d}.pdf"
+            p.write_bytes(await up.read())
+            saved.append(str(p))
+        if saved:
+            merged_path = str(work / "merged.pdf")
+            await asyncio.to_thread(pdf_tools.merge_pdfs, saved, merged_path)
         try:
-            await asyncio.to_thread(orchestrator.build_from_manual, job, script_text, pdf_path)
+            await asyncio.to_thread(orchestrator.build_from_manual, job, script_text, merged_path)
         except Exception as e:  # noqa: BLE001
             job.status = "error"; job.error = str(e)
             raise HTTPException(400, str(e))
         return job.to_public()
+
+    @router.post("/save-bundle")
+    async def save_bundle(
+        request: Request,
+        script_text: str = Form(...),
+        chapter: int = Form(2),
+        title: str = Form("VOD Studio Deck"),
+        output_dir: str = Form(""),
+        pdfs: Optional[List[UploadFile]] = File(None),
+    ):
+        """한 방에: 대본(텍스트) + 슬라이드 PDF(순서대로) → 파싱·병합·이미지 → mediaforge
+        번들(script/chNN_script.json + images/) 로 저장. '검수/번들생성' 통합."""
+        owner = _owner(request)
+        if not (script_text or "").strip():
+            raise HTTPException(400, "대본이 비어 있습니다")
+        from services.vodstudio import pdf_tools
+        job = manager.create(owner, {"mode": "save"})
+        work = orchestrator._work_dir(job)
+        saved = []
+        for i, up in enumerate(pdfs or []):
+            if up is None or not (up.filename or "").lower().endswith(".pdf"):
+                continue
+            p = work / f"slides_{i + 1:02d}.pdf"
+            p.write_bytes(await up.read())
+            saved.append(str(p))
+        merged = None
+        if saved:
+            merged = str(work / "merged.pdf")
+            await asyncio.to_thread(pdf_tools.merge_pdfs, saved, merged)
+        try:
+            await asyncio.to_thread(orchestrator.build_from_manual, job, script_text, merged)
+            payload = await asyncio.to_thread(
+                orchestrator.finalize_bundle, job,
+                chapter=int(chapter), title=title, out_root=(output_dir or None),
+            )
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(400, str(e))
+        try:
+            payload["script_json"] = Path(payload["script_path"]).read_text(encoding="utf-8")
+        except Exception:
+            payload["script_json"] = ""
+        payload["slide_count"] = job.result.get("slide_count")
+        payload["page_count"] = job.result.get("page_count")
+        payload["job_id"] = job.id
+        return payload
 
     # ---- Gemini CLI (구글 로그인 · API 키 없음 · 무료 티어) ----
     @router.get("/gemini/status")
@@ -155,33 +207,34 @@ def setup_vodstudio_routes() -> APIRouter:
             raise HTTPException(502, str(e))
         return {"script": text}
 
-    @router.post("/gemini/from-pdf")
-    async def gemini_from_pdf(
+    @router.post("/gemini/from-file")
+    async def gemini_from_file(
         request: Request,
-        pdf: UploadFile = File(...),
+        file: UploadFile = File(...),
         total_pages: int = Form(40),
         target_audience: str = Form("일반 청중"),
         objective: str = Form("정보 전달"),
         extra: str = Form(""),
     ):
-        """첨부 PDF의 텍스트를 추출 → 그 내용을 소스로 Gemini가 마스터 대본 생성."""
+        """첨부 파일(PDF/Word/PPT/Excel)의 텍스트를 추출 → 소스로 Gemini가 마스터 대본 생성."""
         _owner(request)
         if not gemini.available():
             raise HTTPException(503, "gemini CLI 미설치 — Node + `npm i -g @google/gemini-cli` 후 `gemini` 로그인")
         import tempfile
-        from services.vodstudio import pdf_tools
-        data = await pdf.read()
-        tmp = Path(tempfile.gettempdir()) / f"vod_src_{abs(hash(data)) % 10**8}.pdf"
+        from services.vodstudio import doc_extract
+        data = await file.read()
+        ext = Path(file.filename or "src.pdf").suffix or ".pdf"
+        tmp = Path(tempfile.gettempdir()) / f"vod_src_{abs(hash(data)) % 10**8}{ext}"
         tmp.write_bytes(data)
         try:
-            source_text = await asyncio.to_thread(pdf_tools.extract_text, str(tmp))
+            source_text = await asyncio.to_thread(doc_extract.extract, str(tmp))
         finally:
             try:
                 tmp.unlink()
             except OSError:
                 pass
         if not source_text.strip():
-            raise HTTPException(400, "PDF에서 텍스트를 추출하지 못했습니다(스캔 이미지 PDF일 수 있음).")
+            raise HTTPException(400, "파일에서 텍스트를 추출하지 못했습니다(스캔 이미지 PDF 등일 수 있음).")
         prompt = (
             vod_prompts.master_script_prompt(total_pages, target_audience, objective)
             + "\n\n## 소스 내용 (이 내용을 근거로 작성)\n" + source_text
@@ -193,6 +246,68 @@ def setup_vodstudio_routes() -> APIRouter:
         except gemini.GeminiCliError as e:
             raise HTTPException(502, str(e))
         return {"script": text, "source_chars": len(source_text)}
+
+    # ---- ② 이미지: PDF 여러 개(순서대로) → 페이지 이미지 미리보기 ----
+    @router.post("/preview-images")
+    async def preview_images(request: Request, pdfs: Optional[List[UploadFile]] = File(None)):
+        owner = _owner(request)
+        from services.vodstudio import pdf_tools
+        job = manager.create(owner, {"mode": "tab"})
+        work = orchestrator._work_dir(job)
+        saved = []
+        for i, up in enumerate(pdfs or []):
+            if up is None or not (up.filename or "").lower().endswith(".pdf"):
+                continue
+            p = work / f"slides_{i + 1:02d}.pdf"
+            p.write_bytes(await up.read())
+            saved.append(str(p))
+        merged = None
+        if saved:
+            merged = str(work / "merged.pdf")
+            await asyncio.to_thread(pdf_tools.merge_pdfs, saved, merged)
+        pages = await asyncio.to_thread(orchestrator.render_images_only, job, merged)
+        return {"job_id": job.id, "page_count": len(pages), "images": [p.index for p in pages]}
+
+    # ---- ③ 저장: 대본 + (렌더된)이미지 → mediaforge 번들 ----
+    @router.post("/jobs/{job_id}/save")
+    async def save_job(
+        job_id: str, request: Request,
+        script_text: str = Form(...),
+        chapter: int = Form(2),
+        title: str = Form("VOD Studio Deck"),
+        output_dir: str = Form(""),
+    ):
+        job = manager.get(job_id, _owner(request))
+        if not job:
+            raise HTTPException(404, "Job not found")
+        try:
+            payload = await asyncio.to_thread(
+                orchestrator.save_with_script, job, script_text,
+                chapter=int(chapter), title=title, out_root=(output_dir or None),
+            )
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(400, str(e))
+        try:
+            payload["script_json"] = Path(payload["script_path"]).read_text(encoding="utf-8")
+        except Exception:
+            payload["script_json"] = ""
+        payload["slide_count"] = job.result.get("slide_count")
+        payload["page_count"] = job.result.get("page_count")
+        return payload
+
+    # ---- ③ 음성: 무음(미리보기) WAV 생성 — 빠진 씬만 채움 ----
+    @router.post("/jobs/{job_id}/gen-audio")
+    async def gen_audio(job_id: str, request: Request):
+        job = manager.get(job_id, _owner(request))
+        if not job:
+            raise HTTPException(404, "Job not found")
+        bdir = (job.result.get("bundle") or {}).get("bundle_dir")
+        if not bdir:
+            raise HTTPException(400, "먼저 ③에서 번들을 저장하세요")
+        made = await mp4_render.ensure_silent_audio(bdir)
+        status = mp4_render.audio_status(bdir)
+        status["generated"] = made
+        return status
 
     @router.get("/jobs")
     async def list_jobs(request: Request):
