@@ -1,43 +1,52 @@
 @echo off
-REM ============================================================
-REM 영상공방 (Odyssey VOD Studio) — Windows 설치 스크립트
-REM venv 생성 + 의존성 설치 (notebooklm-mcp-cli, PyMuPDF 포함)
-REM ============================================================
-cd /d %~dp0
+chcp 65001 >nul
+setlocal
+cd /d "%~dp0"
 
-echo [1/3] 가상환경(venv) 생성...
-if not exist venv (
-  python -m venv venv
-)
+echo ============================================================
+echo  영상공방 (Odyssey VOD Studio) - 설치
+echo ============================================================
+echo.
 
-echo [2/3] 의존성 설치...
+where python >nul 2>nul
+if errorlevel 1 goto NOPY
+
+echo [1/6] 가상환경(venv) 생성...
+if not exist venv\Scripts\python.exe python -m venv venv
+
+echo [2/6] venv 활성화...
 call venv\Scripts\activate.bat
+
+echo [3/6] 의존성 설치... (수 분 소요)
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 
-echo [3/5] .env 준비...
-if not exist .env (
-  copy .env.example .env >nul
-  echo   .env 파일을 생성했습니다. Google OAuth 키 등을 채워주세요.
-  echo   ^(knowledge\google-oauth-setup.md 참고^)
-)
+echo [4/6] .env 준비...
+if not exist .env copy .env.example .env >nul
 
-echo [4/5] mp4maker 체크아웃...
-if not exist mp4maker\mp4maker (
-  git clone --depth 1 https://github.com/leedonwoo2827-ship-it/mp4maker.git mp4maker
-)
+echo [5/6] mp4maker 체크아웃...
+if not exist mp4maker\mp4maker git clone --depth 1 https://github.com/leedonwoo2827-ship-it/mp4maker.git mp4maker
 
-echo [5/5] mp4maker 환경 점검 ^(ffmpeg/폰트/패키지^)...
+echo [6/6] mp4maker 환경 점검 (ffmpeg/폰트/패키지)...
 pushd mp4maker
 python -m mp4maker --probe
 popd
-if errorlevel 1 (
-  echo   ^[주의^] ffmpeg/ffprobe 가 PATH에 없을 수 있습니다.
-  echo   https://ffmpeg.org 에서 설치 후 PATH에 추가하세요. ^(winget install Gyan.FFmpeg^)
-)
 
 echo.
-echo 설치 완료!
-echo  - NotebookLM 로그인:  venv\Scripts\nlm login
-echo  - 서버 실행:          run.bat  ^(http://127.0.0.1:7000/vodstudio^)
+echo ============================================================
+echo  설치 완료!
+echo   - NotebookLM 로그인:  venv\Scripts\nlm login
+echo   - 서버 실행:          run.bat   (http://127.0.0.1:7000/vodstudio)
+echo ============================================================
+echo.
 pause
+exit /b 0
+
+:NOPY
+echo.
+echo [오류] python 을 찾을 수 없습니다.
+echo   https://www.python.org 에서 Python 3.11+ 설치 후
+echo   설치 시 "Add python.exe to PATH" 를 체크하세요.
+echo.
+pause
+exit /b 1
