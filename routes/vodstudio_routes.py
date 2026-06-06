@@ -276,6 +276,7 @@ def setup_vodstudio_routes() -> APIRouter:
         chapter: int = Form(2),
         title: str = Form("VOD Studio Deck"),
         output_dir: str = Form(""),
+        voice_style: str = Form("narrator"),
     ):
         job = manager.get(job_id, _owner(request))
         if not job:
@@ -284,6 +285,7 @@ def setup_vodstudio_routes() -> APIRouter:
             payload = await asyncio.to_thread(
                 orchestrator.save_with_script, job, script_text,
                 chapter=int(chapter), title=title, out_root=(output_dir or None),
+                voice_style=voice_style,
             )
         except Exception as e:  # noqa: BLE001
             raise HTTPException(400, str(e))

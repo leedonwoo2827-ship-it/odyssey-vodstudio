@@ -21,6 +21,7 @@ class Slide:
     title: str = ""
     screen_text: str = ""   # 화면 텍스트 — 슬라이드 검수 기준
     narration: str = ""     # 상세 대본 — mp4maker narration_text 원천
+    voice_style: str = ""   # (선택) VoiceWright voice_style — 비면 전역값 사용
 
     def to_dict(self) -> dict:
         return {

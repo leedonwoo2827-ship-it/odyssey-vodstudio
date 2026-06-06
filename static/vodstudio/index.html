@@ -186,6 +186,25 @@
         <div><label>번들 제목</label><input id="bundleTitle" value="VOD Studio Deck"></div>
         <div><label>&nbsp;</label><button id="saveBtn">💾 번들 저장</button></div>
       </div>
+      <label>목소리 (SuperTonic3/VoiceWright · 남5·여5)</label>
+      <select id="voiceStyle" style="max-width:420px">
+        <option value="narrator">기본 내레이터 (M5)</option>
+        <optgroup label="남성">
+          <option value="young_male">남1 · 젊은 (M1)</option>
+          <option value="warm_male">남2 · 따뜻한 (M2)</option>
+          <option value="calm_male">남3 · 차분한 (M3)</option>
+          <option value="energetic_male">남4 · 활기찬 (M4)</option>
+          <option value="deep_male">남5 · 깊은 (M5)</option>
+        </optgroup>
+        <optgroup label="여성">
+          <option value="young_female">여1 · 젊은 (F1)</option>
+          <option value="warm_female">여2 · 따뜻한 (F2)</option>
+          <option value="calm_female">여3 · 차분한 (F3)</option>
+          <option value="energetic_female">여4 · 활기찬 (F4)</option>
+          <option value="mature_female">여5 · 성숙한 (F5)</option>
+        </optgroup>
+      </select>
+      <p class="hint">번들 JSON의 각 씬 <code>voice_style</code>로 저장됩니다. VoiceWright가 이 값을 보고 목소리를 정해요. (씬별로 다른 목소리는 추후 지원)</p>
       <label>출력 폴더 (mediaforge 프로젝트 경로)</label>
       <input id="outputDir" placeholder="예: D:\00work\260602-tech-historybook150  (비우면 앱 내부)">
       <div id="saveStatus" class="hint" style="margin-top:.4rem"></div>

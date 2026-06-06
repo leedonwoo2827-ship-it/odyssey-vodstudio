@@ -55,6 +55,7 @@ def build_bundle(
     subtitle: str = "",
     aspect_ratio: str = "16:9",
     narration_style: Optional[Dict[str, str]] = None,
+    voice_style: str = "narrator",
 ) -> BundleResult:
     """Write a mp4maker-compatible bundle under out_root/_assets/chNN_bundle/.
 
@@ -95,6 +96,7 @@ def build_bundle(
             "narration_text": narration,
             "narration_seconds": secs,
             "image_filename": image_filename,
+            "voice_style": (slide.voice_style or voice_style),  # VoiceWright(Supertonic3) 매핑용
             "scene_meta": {
                 "screen_text": slide.screen_text,
                 "source_slide_number": slide.number,

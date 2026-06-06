@@ -175,6 +175,7 @@ async function saveBundle() {
     fd.append("chapter", $("chapter").value);
     fd.append("title", $("bundleTitle").value.trim() || "VOD Studio Deck");
     fd.append("output_dir", $("outputDir").value.trim());
+    fd.append("voice_style", $("voiceStyle").value);
     const res = await fetch(`${API}/jobs/${JOB}/save`, { method: "POST", credentials: "same-origin", body: fd });
     const d = await res.json();
     if (!res.ok) throw new Error(d.detail || "저장 실패");

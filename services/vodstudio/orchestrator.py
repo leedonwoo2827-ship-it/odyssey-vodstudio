@@ -197,6 +197,7 @@ def render_images_only(job: Job, pdf_path: Optional[str]):
 def save_with_script(
     job: Job, script_text: str, *,
     chapter: int, title: str, out_root: Optional[str] = None, subtitle: str = "",
+    voice_style: str = "narrator",
 ) -> Dict[str, Any]:
     """③ 저장: 대본 파싱 + (이미 렌더된) 이미지와 순서대로 매칭 → mediaforge 번들 저장."""
     slides = parse_or_split(script_text or "")
@@ -216,7 +217,7 @@ def save_with_script(
     job.result["slide_count"] = len(slides)
     if pages and len(pages) != len(slides):
         job.result["warnings"] = [f"대본 {len(slides)}개 vs 이미지 {len(pages)}개 불일치 — 순서대로 매칭"]
-    return finalize_bundle(job, chapter=chapter, title=title, out_root=out_root, subtitle=subtitle)
+    return finalize_bundle(job, chapter=chapter, title=title, out_root=out_root, subtitle=subtitle, voice_style=voice_style)
 
 
 def page_image_path(job: Job, image_index: int) -> Optional[Path]:
@@ -233,6 +234,7 @@ def finalize_bundle(
     edited_slides: Optional[List[Dict[str, Any]]] = None,
     subtitle: str = "",
     out_root: Optional[str] = None,
+    voice_style: str = "narrator",
 ) -> Dict[str, Any]:
     """Build the mp4maker bundle from the (possibly edited) review slides.
 
@@ -257,7 +259,7 @@ def finalize_bundle(
     Path(root).mkdir(parents=True, exist_ok=True)
     result = bundle_builder.build_bundle(
         root, chapter=chapter, title=title, slides=slides,
-        image_paths=image_paths, subtitle=subtitle,
+        image_paths=image_paths, subtitle=subtitle, voice_style=voice_style,
     )
     problems = bundle_builder.validate_bundle(result.bundle_dir)
     payload = {
