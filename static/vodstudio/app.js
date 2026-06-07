@@ -119,6 +119,24 @@ async function genScript() {
   }
 }
 
+// 💾 타겟(청중·목적) 저장/복원 — 시리즈 메모리에 보관
+function setSelect(id, val) {
+  const el = $(id); if (!el || !val) return;
+  for (const o of el.options) { if (o.value === val || o.textContent === val) { el.value = o.value; return; } }
+}
+async function saveTarget() {
+  try {
+    await api("/series-memory", { method: "POST", body: JSON.stringify({ audience: $("gAudience").value, objective: $("gObjective").value }) });
+    $("saveTargetStatus").textContent = `✓ 저장됨 — 청중 '${$("gAudience").value}' · 목적 '${$("gObjective").value}'. 대본 생성하면 이 관점으로 작성됩니다. (딥리서치 썼다면 청중 바꾼 뒤 🔬 다시 실행)`;
+  } catch (e) { $("saveTargetStatus").textContent = "저장 실패: " + e.message; }
+}
+async function loadTarget() {
+  try {
+    const d = await api("/series-memory"); const m = d.memory || {};
+    setSelect("gAudience", m.audience); setSelect("gObjective", m.objective);
+  } catch (e) {}
+}
+
 // 📚 RAG (자료 학습) — 첨부 파일을 로컬 임베딩으로 색인
 async function ragLearn() {
   const files = [...($("srcFile").files || [])];
@@ -882,6 +900,7 @@ on("nextImages", "click", () => showTab("images"));
 on("nextAudio", "click", () => showTab("audio"));
 on("nextVideo", "click", () => showTab("video"));
 on("genBtn", "click", genScript);
+on("saveTargetBtn", "click", saveTarget);
 on("ragBtn", "click", ragLearn);
 on("researchBtn", "click", deepResearch);
 on("reviewBtn", "click", reviewScript);
@@ -923,3 +942,4 @@ loadLlmStatus();
 echoVoice();
 refreshBundles();
 loadDesignPresets();
+loadTarget();
