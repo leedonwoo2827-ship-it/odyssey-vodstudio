@@ -592,7 +592,41 @@ def setup_vodstudio_routes() -> APIRouter:
             merged = str(work / "merged.pdf")
             await asyncio.to_thread(pdf_tools.merge_pdfs, saved, merged)
         pages = await asyncio.to_thread(orchestrator.render_images_only, job, merged)
-        return {"job_id": job.id, "page_count": len(pages), "images": [p.index for p in pages]}
+        images_dir = str((orchestrator._work_dir(job) / "imgs").resolve())
+        return {"job_id": job.id, "page_count": len(pages),
+                "images": [p.index for p in pages], "images_dir": images_dir}
+
+    @router.post("/jobs/{job_id}/replace-image")
+    async def replace_image(job_id: str, request: Request,
+                            index: int = Form(...), file: UploadFile = File(...)):
+        """씬 이미지 교체 — 업로드 PNG로 미리보기 이미지(+저장된 번들 이미지)를 덮어쓴다."""
+        job = manager.get(job_id, _owner(request))
+        if not job:
+            raise HTTPException(404, "Job not found")
+        data = await file.read()
+        if not data:
+            raise HTTPException(400, "빈 파일입니다.")
+        targets = [orchestrator._work_dir(job) / "imgs" / f"page_{int(index):02d}.png"]
+        # 이미 번들로 저장/불러온 상태면 번들 이미지도 함께 교체
+        bdir = (job.result.get("bundle") or {}).get("bundle_dir")
+        if bdir and Path(bdir).exists():
+            from services.vodstudio import voice_studio as vs
+            chap = vs._chap(Path(bdir)) or "00"
+            bimgs = Path(bdir) / "images"
+            hits = sorted(bimgs.glob(f"ch{chap}_{int(index):02d}*")) + sorted(bimgs.glob(f"{int(chap)}_{int(index):02d}*"))
+            targets.append(hits[0] if hits else (bimgs / f"ch{chap}_{int(index):02d}_slide.png"))
+
+        def _save():
+            from PIL import Image
+            im = Image.open(io.BytesIO(data)).convert("RGB")
+            for dest in targets:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                im.save(str(dest), "PNG")
+        try:
+            await asyncio.to_thread(_save)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(400, f"이미지 변환 실패: {e}")
+        return {"ok": True, "index": int(index), "targets": [str(t) for t in targets]}
 
     # ---- ③ 저장: 대본 + (렌더된)이미지 → mediaforge 번들 ----
     @router.post("/jobs/{job_id}/save")

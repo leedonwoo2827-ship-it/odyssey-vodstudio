@@ -382,13 +382,16 @@ async function makeImages() {
     if (!res.ok) throw new Error(d.detail || "이미지 생성 실패");
     JOB = d.job_id;
     $("imgStatus").textContent = `총 ${d.page_count}개 씬(이미지) 생성됨`;
+    if (d.images_dir) { $("imgPath").textContent = "📁 이미지 저장 위치: " + d.images_dir; $("imgPath").classList.remove("hidden"); }
     const wrap = $("thumbs");
     wrap.innerHTML = "";
     (d.images || []).forEach(idx => {
       const el = document.createElement("div");
       el.className = "thumb";
       el.innerHTML = `<img loading="lazy" src="${API}/jobs/${JOB}/image/${idx}" alt="씬${idx}">` +
-        `<div class="cap"><span>씬 ${idx}</span><span class="pill ok">OK</span></div>`;
+        `<div class="cap"><span>씬 ${idx}</span><span><button class="repl small secondary" type="button" style="padding:.1rem .4rem;font-size:.72rem">🖼 교체</button> <span class="pill ok">OK</span></span></div>`;
+      const img = el.querySelector("img");
+      el.querySelector(".repl").addEventListener("click", () => replaceSceneImage(idx, img));
       wrap.appendChild(el);
     });
     if (d.page_count) markDone("images");
@@ -461,11 +464,36 @@ function fillScriptFromScenes(scenes) {
 }
 function renderThumbsFromBundle(scenes) {
   const wrap = $("thumbs"); if (!wrap) return;
-  wrap.innerHTML = (scenes || []).map(s => s.has_image && s.image_file
-    ? `<div class="thumb"><img loading="lazy" src="${API}/jobs/${JOB}/file/images/${encodeURIComponent(s.image_file)}?t=${Date.now()}" alt="씬${s.scene}"><div class="cap"><span>씬 ${s.scene}</span><span class="pill ok">OK</span></div></div>`
-    : `<div class="thumb"><div class="miss">씬${s.scene} 없음</div></div>`).join("");
+  wrap.innerHTML = "";
+  (scenes || []).forEach(s => {
+    const el = document.createElement("div"); el.className = "thumb";
+    if (s.has_image && s.image_file) {
+      el.innerHTML = `<img loading="lazy" src="${API}/jobs/${JOB}/file/images/${encodeURIComponent(s.image_file)}?t=${Date.now()}" alt="씬${s.scene}"><div class="cap"><span>씬 ${s.scene}</span><span><button class="repl small secondary" type="button" style="padding:.1rem .4rem;font-size:.72rem">🖼 교체</button> <span class="pill ok">OK</span></span></div>`;
+      const img = el.querySelector("img");
+      el.querySelector(".repl").addEventListener("click", () => replaceSceneImage(s.scene, img));
+    } else {
+      el.innerHTML = `<div class="miss">씬${s.scene} 없음</div>`;
+    }
+    wrap.appendChild(el);
+  });
   const n = (scenes || []).filter(s => s.has_image).length;
   $("imgStatus").textContent = `불러온 번들 — 이미지 ${n}/${(scenes || []).length}개`;
+}
+// 🖼 씬 이미지 교체 — PNG 업로드로 그 씬 이미지를 덮어쓴다
+function replaceSceneImage(idx, imgEl) {
+  if (!JOB) { alert("먼저 이미지를 가져오거나 번들을 불러오세요."); return; }
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*";
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    const fd = new FormData(); fd.append("index", idx); fd.append("file", f);
+    try {
+      const res = await fetch(`${API}/jobs/${JOB}/replace-image`, { method: "POST", credentials: "same-origin", body: fd });
+      const d = await res.json(); if (!res.ok) throw new Error(d.detail || "교체 실패");
+      imgEl.src = imgEl.src.split("?")[0] + "?t=" + Date.now();
+      $("imgStatus").textContent = `씬 ${idx} 이미지 교체됨 ✓`;
+    } catch (e) { alert("이미지 교체 실패: " + e.message); }
+  };
+  inp.click();
 }
 async function loadBundle() {
   const dir = $("bundleSelect").value;
@@ -481,6 +509,7 @@ async function loadBundle() {
     const m = /(\d+)/.exec(st.chapter || ""); if (m && $("chapter")) $("chapter").value = parseInt(m[1], 10);
     // ② 이미지 복원
     renderThumbsFromBundle(scenes);
+    if (st.path) { $("imgPath").textContent = "📁 이미지 저장 위치: " + st.path + "\\images"; $("imgPath").classList.remove("hidden"); }
     // ③ 음성/자막 카드
     loadScenes();
     // ④ 최종 영상 복원
