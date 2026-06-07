@@ -378,8 +378,8 @@ async function makeImages() {
     files.forEach(f => fd.append("pdfs", f));
     if (JOB) fd.append("job_id", JOB);
     const res = await fetch(API + "/preview-images", { method: "POST", credentials: "same-origin", body: fd });
-    const d = await res.json();
-    if (!res.ok) throw new Error(d.detail || "이미지 생성 실패");
+    let d = null; try { d = await res.json(); } catch (e) {}
+    if (!res.ok) throw new Error((d && d.detail) || `서버 오류 (HTTP ${res.status}) — 서버 콘솔 로그 확인`);
     JOB = d.job_id;
     $("imgStatus").textContent = `총 ${d.page_count}개 씬(이미지) 생성됨`;
     if (d.images_dir) { $("imgPath").textContent = "📁 이미지 저장 위치: " + d.images_dir; $("imgPath").classList.remove("hidden"); }

@@ -588,10 +588,14 @@ def setup_vodstudio_routes() -> APIRouter:
             p.write_bytes(await up.read())
             saved.append(str(p))
         merged = None
-        if saved:
-            merged = str(work / "merged.pdf")
-            await asyncio.to_thread(pdf_tools.merge_pdfs, saved, merged)
-        pages = await asyncio.to_thread(orchestrator.render_images_only, job, merged)
+        try:
+            if saved:
+                merged = str(work / "merged.pdf")
+                await asyncio.to_thread(pdf_tools.merge_pdfs, saved, merged)
+            pages = await asyncio.to_thread(orchestrator.render_images_only, job, merged)
+        except Exception as e:  # noqa: BLE001 — PDF 손상/암호/형식 오류 등을 사용자에게 그대로 전달
+            logger.exception("preview-images 실패")
+            raise HTTPException(400, f"PDF 처리 실패: {e} (손상·암호화·非PDF 파일인지 확인하세요)")
         images_dir = str((orchestrator._work_dir(job) / "imgs").resolve())
         return {"job_id": job.id, "page_count": len(pages),
                 "images": [p.index for p in pages], "images_dir": images_dir}
