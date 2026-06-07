@@ -1075,6 +1075,23 @@ def setup_vodstudio_routes() -> APIRouter:
         except Exception as e:  # noqa: BLE001
             raise HTTPException(400, str(e))
 
+    class SetVoiceRequest(BaseModel):
+        voice: Optional[str] = None        # 코드(M1..F5)/스타일명, 비우면 전체 기본값
+        only: Optional[List[int]] = None   # None이면 전체 씬
+
+    @router.post("/jobs/{job_id}/set-voice")
+    async def set_voice(job_id: str, body: SetVoiceRequest, request: Request):
+        """대본의 씬 보이스를 일괄(또는 일부) 지정 — 디스크에 저장되어 재생성/새로고침 후 유지."""
+        job = manager.get(job_id, _owner(request))
+        if not job:
+            raise HTTPException(404, "Job not found")
+        from services.vodstudio import voice_studio as vs
+        bdir = _bundle_dir_of(job)
+        try:
+            return await asyncio.to_thread(vs.set_voices, bdir, body.voice, body.only)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(400, str(e))
+
     class SceneCue(BaseModel):
         text: str
         start: float

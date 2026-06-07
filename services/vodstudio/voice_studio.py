@@ -173,6 +173,34 @@ def _resolve_voice(bundle: Path, scene: int, voice: str | None) -> str:
     return code
 
 
+def set_voices(bundle_dir: str | Path, voice: str | None, only: list[int] | None = None) -> dict:
+    """대본 JSON의 씬 voice_style을 일괄(또는 일부) 변경한다.
+
+    voice=코드(M1..F5)/스타일명 → 저장, voice 비어있음 → 항목 제거(전체 기본값으로 복귀).
+    only=None 이면 전체 씬, only=[2,5] 이면 해당 씬만.
+    """
+    bundle = Path(bundle_dir).resolve()
+    sp = find_script(bundle)
+    data = _json.loads(sp.read_text(encoding="utf-8"))
+    val = (voice or "").strip()
+    code = val.upper() if val else None
+    if code and code not in ALL_VOICE_CODES:
+        raise ValueError(f"알 수 없는 보이스: {voice}")
+    want = {int(n) for n in only} if only else None
+    changed = 0
+    for pos, sc in enumerate(data.get("scenes") or []):
+        idx = int(sc.get("scene") or sc.get("scene_number") or pos + 1)
+        if want is not None and idx not in want:
+            continue
+        if code:
+            sc["voice_style"] = code
+        else:
+            sc.pop("voice_style", None)
+        changed += 1
+    sp.write_text(_json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"changed": changed, "voice": code}
+
+
 async def synth_scene_text(
     bundle_dir: str | Path,
     scene: int,
@@ -202,6 +230,12 @@ async def synth_scene_text(
 
     engine = await Engine.get()
     code = _resolve_voice(bundle, scene, voice)
+    # 사용자가 이 씬의 보이스를 명시했으면 대본 JSON에 기록 → 새로고침/재생성 후에도 유지
+    if voice:
+        try:
+            set_voices(bundle, code, only=[int(scene)])
+        except Exception:
+            pass
     wav = await engine.synth(text, voice_code=code, total_step=total_step, speed=speed)
 
     audio_dir = bundle / "audio"
@@ -332,16 +366,21 @@ def bundle_status(bundle_dir: str | Path) -> dict:
         except Exception as exc:
             return {"bundle": root.name, "ok": False, "error": f"대본 JSON 파싱 실패: {exc}"}
         title = data.get("title") or ""
+        vmap = load_voice_map(settings_module.load().voice_map_path)
         for pos, sc in enumerate(data.get("scenes") or []):
             idx = int(sc.get("scene") or sc.get("scene_number") or pos + 1)
             img = _find_prefix_file(root / "images", chap, idx, IMG_EXTS)
             aud = _find_prefix_file(root / "audio", chap, idx, AUD_EXTS, "_narration")
             sub = _find_prefix_file(root / "subtitles", chap, idx, (".srt",), "_narration")
+            vstyle = sc.get("voice_style")
+            vcode = vmap.resolve(vstyle)[0] if vstyle else ""
             scenes_out.append({
                 "scene": idx,
                 "title": sc.get("title") or "",
                 "narration_text": sc.get("narration_text") or "",
                 "srt_text": sc.get("srt_text"),
+                "voice_style": vstyle,
+                "voice_code": vcode,
                 "narration_seconds": sc.get("narration_seconds"),
                 "has_image": img is not None,
                 "has_audio": aud is not None,

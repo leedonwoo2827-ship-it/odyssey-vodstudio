@@ -309,6 +309,12 @@ Use point colors (e.g., Deep Blue) for emphasis.</textarea>
         <span id="audioStatus" class="hint">번들 저장 후 사용할 수 있어요.</span>
       </div>
       <div class="bar hidden" id="synthBar"><div id="synthBarFill"></div></div>
+      <div class="toolbar" style="margin-top:.4rem; align-items:center">
+        <span class="hint">전체 보이스</span>
+        <select id="voiceAll" style="width:auto"></select>
+        <button id="voiceAllBtn" class="secondary small" type="button">전체 적용</button>
+        <span id="voiceAllStatus" class="hint"></span>
+      </div>
       <p class="hint">발음이 이상하면 ① <b>발음 사전</b>에 단어를 추가하고 → 그 씬만 🔁 재생성하세요. (발음 사전은 TTS 입력에만 적용, 자막 원문은 유지) 싱크가 어긋나면 타이밍을 직접 조정/저장.</p>
       <div id="pronPanel" class="hidden" style="margin-top:.6rem; padding:.8rem; border:1px solid var(--border); border-radius:8px; background:var(--bg)">
         <p class="hint" style="margin:0 0 .4rem">한 줄에 하나: <code>원문 =&gt; 발음</code> (예: <code>KOSHA =&gt; 코샤</code>, <code>MSDS =&gt; 엠에스디에스</code>). 영문 약어·헷갈리는 한자어를 넣어두면 그 발음으로 읽습니다.</p>

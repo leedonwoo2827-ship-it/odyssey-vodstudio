@@ -41,6 +41,11 @@ class VoiceMap:
         if not key:
             return self.default, None
 
+        # 원시 보이스 코드(M1..F5)는 그대로 사용 — UI에서 코드를 직접 저장/전달하는 경로 지원
+        code_up = voice_style.strip().upper()
+        if code_up in ALL_VOICE_CODES:
+            return code_up, None
+
         if key in self.styles:
             return self.styles[key], None
 

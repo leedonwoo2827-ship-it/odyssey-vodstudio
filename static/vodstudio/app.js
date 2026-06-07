@@ -544,8 +544,10 @@ const VOICE_OPTS = [
   ["", "(기본)"], ["M1", "남1 젊은"], ["M2", "남2 따뜻"], ["M3", "남3 차분"], ["M4", "남4 활기"], ["M5", "남5 깊은"],
   ["F1", "여1 젊은"], ["F2", "여2 따뜻"], ["F3", "여3 차분"], ["F4", "여4 활기"], ["F5", "여5 성숙"],
 ];
-function voiceSelectHtml() {
-  return VOICE_OPTS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+function voiceSelectHtml(selected) {
+  const sel = (selected || "").toUpperCase();
+  return VOICE_OPTS.map(([v, l]) =>
+    `<option value="${v}"${v === sel ? " selected" : ""}>${l}</option>`).join("");
 }
 function fmtT(s) { return (Math.round((s || 0) * 100) / 100).toFixed(2); }
 function srtTimeToSec(t) {
@@ -598,7 +600,7 @@ async function loadScenes() {
       <div class="toolbar" style="margin-top:.5rem">
         <button class="pron secondary small" type="button">한국어 발음 전환</button>
         <span class="hint">보이스</span>
-        <select class="voice" style="width:auto">${voiceSelectHtml()}</select>
+        <select class="voice" style="width:auto">${voiceSelectHtml(s.voice_code)}</select>
         <button class="regen small" type="button">🔁 음성 재생성</button>
       </div>
       ${audio}
@@ -737,6 +739,25 @@ async function genAudio() {
     loadScenes();
   } catch (e) { $("audioStatus").textContent = "오류: " + e.message; }
   finally { $("genAudioBtn").disabled = false; }
+}
+
+// ---- 전체 보이스 일괄 적용 (③ 상단) ----
+function fillVoiceAll() {
+  const sel = $("voiceAll"); if (!sel || sel.options.length) return;
+  sel.innerHTML = voiceSelectHtml("");
+}
+async function applyVoiceAll() {
+  if (!JOB) { alert("먼저 ③에서 번들을 저장하세요."); return; }
+  const v = $("voiceAll").value;
+  const btn = $("voiceAllBtn"), st = $("voiceAllStatus");
+  btn.disabled = true; st.textContent = "적용 중…";
+  try {
+    const d = await api(`/jobs/${JOB}/set-voice`, { method: "POST", body: JSON.stringify({ voice: v || null }) });
+    // 화면의 모든 씬 드롭다운도 즉시 반영
+    document.querySelectorAll("#sceneCards .voice").forEach(s => { s.value = (v || "").toUpperCase(); });
+    st.textContent = `✓ 전체 ${d.changed}개 씬에 적용됨 — 🔊 전체 음성/자막 생성으로 반영하세요.`;
+  } catch (e) { st.textContent = "실패: " + e.message; }
+  finally { btn.disabled = false; }
 }
 
 // ---- 📖 발음 사전 편집 ----
@@ -961,6 +982,7 @@ on("loadBundleBtn", "click", loadBundle);
 on("saveBtn", "click", saveBundle);
 on("saveBtn2", "click", saveFromImages);
 on("synthAllBtn", "click", synthAll);
+on("voiceAllBtn", "click", applyVoiceAll);
 on("pronDictBtn", "click", openPronDict);
 on("pronSaveBtn", "click", savePronDict);
 on("pronCloseBtn", "click", () => $("pronPanel").classList.add("hidden"));
@@ -981,6 +1003,7 @@ on("llmLoginBtn", "click", llmLogin);
 
 wireSrcDrop();
 buildSlots();
+fillVoiceAll();
 loadLlmStatus();
 echoVoice();
 refreshBundles();
