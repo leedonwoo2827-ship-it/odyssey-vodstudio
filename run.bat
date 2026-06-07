@@ -3,17 +3,34 @@ chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
 
-if not exist venv\Scripts\activate.bat goto NOVENV
-call venv\Scripts\activate.bat
+REM Port for this instance. Change here if it conflicts with another app.
+set "PORT=7000"
 
-REM 로컬 단독 사용: 시작 시 로그인 강제하지 않음 (구글 로그인은 화면 ⚙ 에서 선택적으로).
-REM 외부 노출 시 .env 에서 AUTH_ENABLED=true 로 설정하세요.
+if not exist venv\Scripts\python.exe goto NOVENV
+
+REM Self-heal: agy needs pywinpty to capture its console output (else "agy 호출 실패(exit=0)").
+venv\Scripts\python -c "import winpty" 2>nul || (echo pywinpty 설치 중... & venv\Scripts\python -m pip install pywinpty)
+
+REM Make agy/codex visible if installed to common locations (PATH may be stale).
+if exist "%ProgramFiles%\nodejs\npm.cmd" set "PATH=%PATH%;%ProgramFiles%\nodejs"
+if exist "%LOCALAPPDATA%\Antigravity\agy.exe" set "PATH=%PATH%;%LOCALAPPDATA%\Antigravity"
+
+REM Local single-user: do not force login at start (Google login optional in the gear menu).
 if "%AUTH_ENABLED%"=="" set AUTH_ENABLED=false
 
-echo 서버 시작 중... 잠시 후 브라우저가 열립니다: http://127.0.0.1:7000/vodstudio
-start "" /b cmd /c "timeout /t 4 >nul & start http://127.0.0.1:7000/vodstudio"
+echo ============================================================
+echo   영상공방 (VOD Studio) 시작
+echo   URL: http://127.0.0.1:%PORT%/vodstudio
+echo   (이 창을 닫으면 종료됩니다)
+echo ============================================================
+echo.
 
-python -m uvicorn app:app --host 127.0.0.1 --port 7000
+start "" /b cmd /c "timeout /t 4 >nul & start http://127.0.0.1:%PORT%/vodstudio"
+
+venv\Scripts\python -m uvicorn app:app --host 127.0.0.1 --port %PORT%
+
+echo.
+echo 서버가 종료되었습니다.
 pause
 exit /b 0
 

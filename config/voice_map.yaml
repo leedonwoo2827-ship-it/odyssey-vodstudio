@@ -1,0 +1,41 @@
+# voicewright voice mapping
+# scriptforge가 master screenplay JSON에 적는 voice_style 문자열을
+# Supertonic 보이스 코드(M1-M5 male / F1-F5 female)로 변환하는 표.
+#
+# - 조회는 lowercase + strip 후 일치
+# - 매칭 실패 시 male/남성 → M3, female/여성 → F2 휴리스틱
+# - 그래도 실패하면 default 사용 (job warnings에 기록됨)
+# - 새 voice_style이 등장하면 styles 아래에 한 줄 추가하면 됨
+
+default: M5
+
+styles:
+  # 내레이션 / 일반 — 다큐멘터리 톤 기본 M5 (deep_male)
+  narrator:           M5
+  default:            M5
+  neutral:            M5
+  storyteller:        F3
+
+  # 여성 변형
+  calm_female:        F3
+  warm_female:        F2
+  energetic_female:   F4
+  young_female:       F1
+  mature_female:      F5
+  bright_female:      F4
+
+  # 남성 변형
+  calm_male:          M3
+  warm_male:          M2
+  energetic_male:     M4
+  young_male:         M1
+  mature_male:        M5
+  deep_male:          M5
+  authoritative_male: M5
+
+  # 한글 표기 (scriptforge가 한글로 적을 가능성 대비)
+  남성_차분:          M3
+  남성_활기:          M4
+  여성_차분:          F3
+  여성_활기:          F4
+  내레이터:           F2

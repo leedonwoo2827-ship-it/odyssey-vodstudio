@@ -20,34 +20,26 @@
   .badge.no { color:var(--err); border-color:var(--err); }
   main { max-width:1100px; margin:0 auto; padding:1.5rem; }
   .card { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:1.2rem 1.3rem; margin-bottom:1.2rem; }
-  .card h2 { font-size:1rem; margin:0 0 .9rem; display:flex; align-items:center; gap:.5rem; }
-  .step-num { display:inline-flex; width:1.5rem; height:1.5rem; align-items:center; justify-content:center; background:var(--accent); color:#fff; border-radius:50%; font-size:.8rem; font-weight:700; }
+  .card h3 { font-size:1rem; margin:0 0 .9rem; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
   label { display:block; font-size:.82rem; color:var(--muted); margin:.7rem 0 .25rem; }
   input, select, textarea { width:100%; background:var(--bg); color:var(--fg); border:1px solid var(--border); border-radius:8px; padding:.5rem .65rem; font-size:.9rem; font-family:inherit; }
   textarea { resize:vertical; min-height:64px; }
   .row { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
   .row3 { display:grid; grid-template-columns:repeat(3,1fr); gap:.8rem; }
-  .check { display:flex; align-items:center; gap:.5rem; margin-top:.8rem; }
-  .check input { width:auto; }
   button { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:.6rem 1.1rem; font-size:.9rem; font-weight:600; cursor:pointer; }
   button.secondary { background:var(--panel2); border:1px solid var(--border); color:var(--fg); }
+  button.small { padding:.35rem .7rem; font-size:.8rem; font-weight:500; }
   button:disabled { opacity:.5; cursor:not-allowed; }
   .hint { font-size:.8rem; color:var(--muted); }
   .bar { height:8px; background:var(--panel2); border-radius:999px; overflow:hidden; margin:.5rem 0; }
-  .bar > div { height:100%; background:var(--accent); width:0%; transition:width .3s; }
-  .logs { font-family:ui-monospace,Consolas,monospace; font-size:.78rem; color:var(--muted); background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:.6rem; max-height:160px; overflow:auto; white-space:pre-wrap; }
+  .bar > div { height:100%; background:var(--accent2); width:0%; transition:width .3s; }
+  .logs { font-family:ui-monospace,Consolas,monospace; font-size:.78rem; color:var(--muted); background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:.6rem; max-height:200px; overflow:auto; white-space:pre-wrap; }
   .warn { color:var(--warn); font-size:.85rem; }
   .err { color:var(--err); }
-  .slides { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; }
-  .slide { background:var(--panel2); border:1px solid var(--border); border-radius:var(--radius); padding:.8rem; }
-  .slide img { width:100%; border-radius:6px; border:1px solid var(--border); background:#000; display:block; }
-  .slide .idx { font-size:.78rem; color:var(--muted); margin:.4rem 0; }
-  .slide details { margin-top:.5rem; }
-  .slide summary { font-size:.78rem; color:var(--muted); cursor:pointer; }
-  .slide pre { font-size:.72rem; white-space:pre-wrap; color:var(--muted); max-height:120px; overflow:auto; }
   .hidden { display:none; }
   .toolbar { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
   .pill { font-size:.78rem; color:var(--muted); }
+  .pill.ok { color:var(--accent2); border:1px solid var(--accent2); border-radius:999px; padding:.05rem .45rem; }
   code { background:var(--bg); padding:.1rem .3rem; border-radius:4px; }
   .iconbtn { width:34px; height:34px; padding:0; border-radius:8px; background:var(--panel2); border:1px solid var(--border); color:var(--fg); font-size:1.05rem; cursor:pointer; }
   .iconbtn:hover { background:var(--border); }
@@ -57,23 +49,48 @@
   .settings-panel h3 { margin:0 0 .8rem; font-size:.95rem; }
   .set-row { display:flex; align-items:flex-start; justify-content:space-between; gap:.8rem; padding:.7rem 0; border-top:1px solid var(--border); }
   .set-row:first-of-type { border-top:none; }
-  .set-row button { white-space:nowrap; }
-  .modebar { display:flex; gap:.5rem; margin-bottom:1.2rem; }
-  .modebtn { background:var(--panel2); border:1px solid var(--border); color:var(--muted); border-radius:999px; padding:.5rem 1.1rem; font-size:.88rem; }
-  .modebtn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
   .filebox { display:flex; align-items:center; justify-content:center; gap:.5rem; width:100%;
     min-height:84px; padding:1rem; border:2px dashed var(--border); border-radius:10px;
     background:var(--bg); color:var(--muted); cursor:pointer; text-align:center; transition:all .15s; }
   .filebox:hover, .filebox.drag { border-color:var(--accent); color:var(--fg); background:var(--panel2); }
   .filebox.has-file { border-style:solid; border-color:var(--accent2); color:var(--accent2); }
   .logo-ic { font-size:1.3rem; }
+  /* mediaforge식 진행 스테퍼(녹색 점) */
   .stepper { display:flex; align-items:center; gap:.4rem; margin-left:1rem; font-size:.85rem; }
-  .stepper .step { color:var(--muted); padding:.25rem .6rem; border-radius:999px; border:1px solid transparent; background:transparent; font:inherit; cursor:pointer; }
+  .stepper .step { color:var(--muted); padding:.25rem .6rem; border-radius:999px; border:1px solid transparent; background:transparent; font:inherit; cursor:pointer; display:flex; align-items:center; gap:.35rem; }
+  .stepper .step::before { content:"●"; color:var(--border); font-size:.7rem; }
   .stepper .step:hover { color:var(--fg); }
-  .stepper .step.active { color:#fff; background:var(--accent); }
-  .stepper .step.done { color:var(--accent2); border-color:var(--accent2); }
+  .stepper .step.active { color:#fff; }
+  .stepper .step.active::before { color:var(--accent); }
+  .stepper .step.done::before { color:var(--accent2); }
   .stepper .sep { color:var(--border); }
   @media (max-width:720px){ .stepper{display:none;} }
+  /* 공급자 토글 */
+  .provtoggle { display:inline-flex; border:1px solid var(--border); border-radius:999px; overflow:hidden; }
+  .provtoggle button { background:var(--panel2); color:var(--muted); border:none; border-radius:0; padding:.35rem .9rem; font-size:.82rem; font-weight:600; }
+  .provtoggle button.active { background:var(--accent); color:#fff; }
+  /* 파일 칩 */
+  .chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.5rem; }
+  .chip { background:var(--panel2); border:1px solid var(--border); border-radius:999px; padding:.2rem .6rem; font-size:.78rem; color:var(--fg); }
+  /* 이미지 그리드(씬N OK 배지) */
+  .thumbs { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:.8rem; }
+  .thumb { background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:.4rem; }
+  .thumb img { width:100%; border-radius:6px; border:1px solid var(--border); background:#000; display:block; aspect-ratio:16/9; object-fit:cover; }
+  .thumb .cap { display:flex; justify-content:space-between; align-items:center; margin-top:.35rem; font-size:.78rem; color:var(--muted); }
+  .thumb .miss { display:flex; align-items:center; justify-content:center; aspect-ratio:16/9; color:var(--err); font-size:.82rem; border:1px dashed var(--err); border-radius:6px; }
+  /* 씬별 음성/자막 카드 */
+  .scard { background:var(--panel2); border:1px solid var(--border); border-radius:var(--radius); padding:.9rem 1rem; margin-bottom:.9rem; }
+  .scard-head { font-weight:600; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:.5rem; }
+  .scard-head .dur { color:var(--muted); font-weight:400; font-size:.82rem; }
+  .twocol { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; }
+  @media (max-width:720px){ .twocol{grid-template-columns:1fr;} .row,.row3{grid-template-columns:1fr;} }
+  .scard audio { width:100%; margin-top:.6rem; }
+  .cuepv { background:#000; border:1px solid var(--border); border-radius:8px; min-height:42px; margin-top:.5rem; padding:.5rem; text-align:center; color:var(--muted); font-size:.85rem; }
+  .cuehead { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-top:.7rem; }
+  .cuehead b { margin-right:auto; }
+  .cuerow { display:grid; grid-template-columns:90px 90px 1fr 32px; gap:.4rem; margin-top:.35rem; align-items:center; }
+  .cuerow input { padding:.35rem .5rem; font-size:.82rem; }
+  .cuerow .del { background:var(--panel); border:1px solid var(--border); color:var(--err); border-radius:6px; padding:.3rem 0; }
 </style>
 </head>
 <body>
@@ -90,12 +107,12 @@
     <button class="step" data-tab="video">④ 영상</button>
   </nav>
   <span style="flex:1"></span>
-  <button id="gearBtn" class="iconbtn" title="설정 / 구글 로그인" aria-label="설정">⚙</button>
+  <button id="gearBtn" class="iconbtn" title="설정 / 앱 로그인" aria-label="설정">⚙</button>
   <a href="/" class="pill">← 메인</a>
 </header>
 
 <main>
-  <!-- 설정 패널 (⚙) — 구글 로그인은 강제하지 않고 여기서 선택적으로 한다 -->
+  <!-- 설정 패널 (⚙) -->
   <div id="settingsPanel" class="settings-panel hidden">
     <h3>설정</h3>
     <div class="set-row">
@@ -109,57 +126,144 @@
       <div>
         <b>NotebookLM 연결</b>
         <div id="nlmStatusLine" class="hint">확인 중…</div>
-        <div class="hint">터미널에서 <code>nlm login</code> 후 '다시 확인'. (1·2단계 슬라이드/대본 생성에만 필요 — 번들·렌더는 불필요)</div>
+        <div class="hint">터미널에서 <code>nlm login</code> 후 '다시 확인'. (슬라이드/대본 생성에만 필요)</div>
       </div>
       <button id="nlmRecheck" class="secondary">다시 확인</button>
     </div>
   </div>
 
-  <!-- ① 대본 (Gemini CLI) -->
+  <!-- 📂 전역 번들 바 (최상단 · 모든 탭에서 보임) -->
+  <div class="card" id="bundleBar" style="padding:.6rem 1rem">
+    <div class="toolbar">
+      <b style="white-space:nowrap">📂 번들</b>
+      <button id="bundlesRefresh" class="secondary small" title="목록 새로고침">🔄</button>
+      <select id="bundleSelect" style="flex:1; min-width:240px"><option value="">— 저장/렌더한 번들 불러오기 —</option></select>
+      <button id="loadBundleBtn" class="secondary small">불러오기</button>
+      <span id="loadStatus" class="hint"></span>
+    </div>
+    <details style="margin-top:.4rem">
+      <summary class="hint">ⓘ 번들 불러오기란?</summary>
+      <p class="hint" style="margin:.3rem 0 0">재시작 후에도 작업을 이어가는 기능입니다. 고르면 ①대본·②이미지·④영상까지 복원되고, 음성/자막·추가 렌더·유튜브 메타·폴더 열기를 그대로 이어갈 수 있어요. 출력 폴더를 쓰셨다면 ③의 '출력 폴더'에 경로를 넣고 🔄 누르면 그 폴더의 번들도 보입니다.</p>
+    </details>
+  </div>
+
+  <!-- ① 대본 -->
   <section class="panel" data-panel="script">
     <div class="card">
-      <h3>① 대본 — Gemini로 생성 <span class="badge" id="geminiBadge">확인 중…</span></h3>
+      <h3>① 대본 — 생성 LLM
+        <span class="provtoggle" id="provToggle">
+          <button data-prov="codex">OpenAI</button>
+          <button data-prov="agy">Gemini</button>
+        </span>
+        <span class="badge" id="llmBadge">확인 중…</span>
+        <button id="llmLoginBtn" class="secondary small">🖥️ 로그인(터미널)</button>
+      </h3>
+
       <label id="srcDrop" class="filebox" style="min-height:84px">
-        <input id="srcFile" type="file" accept=".pdf,.docx,.pptx,.xlsx,.xls,.epub,.txt,.md" hidden>
-        <span id="srcBoxText">📎 소스 파일 첨부 (PDF·Word·PPT·Excel) — 이 내용으로 대본 생성</span>
+        <input id="srcFile" type="file" multiple accept=".pdf,.docx,.pptx,.xlsx,.xls,.epub,.txt,.md" hidden>
+        <span id="srcBoxText">📎 소스 파일 첨부 (여러 개 가능 · PDF·Word·PPT·Excel) — 이 내용으로 대본 생성</span>
       </label>
+      <div id="srcChips" class="chips"></div>
+
+      <!-- 목소리 선택(전체 기본) — 파일첨부 바로 아래로 이동 + 들어보기 -->
+      <label style="margin-top:.9rem">목소리 (로컬 CPU TTS · SuperTonic3 · 남5·여5) — 전체 기본값</label>
+      <div class="toolbar">
+        <select id="voiceStyle" style="max-width:360px">
+          <option value="narrator">기본 내레이터 (M5)</option>
+          <optgroup label="남성">
+            <option value="young_male">남1 · 젊은 (M1)</option>
+            <option value="warm_male">남2 · 따뜻한 (M2)</option>
+            <option value="calm_male">남3 · 차분한 (M3)</option>
+            <option value="energetic_male">남4 · 활기찬 (M4)</option>
+            <option value="deep_male">남5 · 깊은 (M5)</option>
+          </optgroup>
+          <optgroup label="여성">
+            <option value="young_female">여1 · 젊은 (F1)</option>
+            <option value="warm_female">여2 · 따뜻한 (F2)</option>
+            <option value="calm_female">여3 · 차분한 (F3)</option>
+            <option value="energetic_female">여4 · 활기찬 (F4)</option>
+            <option value="mature_female">여5 · 성숙한 (F5)</option>
+          </optgroup>
+        </select>
+        <button id="voicePreviewBtn" class="secondary">▶ 들어보기</button>
+        <span id="voicePreviewStatus" class="hint"></span>
+      </div>
+      <audio id="voicePreviewAudio" class="hidden" controls style="width:100%; margin-top:.5rem"></audio>
+
       <div class="row3" style="margin-top:.8rem">
         <div><label>슬라이드 수</label>
-          <select id="gTotal"><option>20</option><option>30</option><option selected>40</option><option>50</option><option>60</option></select></div>
+          <select id="gTotal"><option>20</option><option>30</option><option>40</option><option>45</option><option selected>60</option></select></div>
         <div><label>타겟 청중</label>
           <select id="gAudience"><option>중소기업 CEO</option><option>4060 지식창업자</option><option>임직원·실무자</option><option>대학생·일반인</option><option>투자자</option><option>학부모</option></select></div>
         <div><label>발표 목적</label>
           <select id="gObjective"><option>정보 전달</option><option>교육</option><option>투자 유치</option><option>제안</option><option>마케팅</option></select></div>
       </div>
+      <!-- 준비 도구 (대본 생성 전) — 도커 0 · 로컬. 자세한 설명: knowledge/vodstudio-rag-research.md -->
+      <div style="margin-top:.9rem; padding:.8rem; border:1px dashed var(--border); border-radius:10px; background:var(--bg)">
+        <div class="toolbar">
+          <button id="ragBtn" class="secondary">📚 자료 학습 (RAG)</button>
+          <button id="researchBtn" class="secondary">🔬 딥리서치 (자료 심층분석)</button>
+          <span id="prepStatus" class="hint"></span>
+        </div>
+        <p class="hint" style="margin:.45rem 0 0">📚 첨부 자료를 학습해 슬라이드마다 <b>관련 조문만 근거</b>로 씁니다(큰 문서도 안 잘림). · 🔬 핵심 <b>쟁점을 먼저 정리</b>해 뼈대를 잡습니다. <span class="pill">자세한 설명: knowledge/vodstudio-rag-research.md</span></p>
+        <details id="briefBox" class="hidden" style="margin-top:.5rem"><summary class="hint">🔬 리서치 브리프 보기</summary><pre id="briefOut" class="logs" style="max-height:260px"></pre></details>
+      </div>
+
       <div class="toolbar" style="margin-top:.8rem">
-        <button id="genBtn">✦ Gemini로 대본 생성</button>
+        <button id="genBtn">✦ 대본 생성</button>
         <span id="genStatus" class="hint"></span>
       </div>
       <label style="margin-top:.6rem">대본 (수정 가능 · 직접 붙여넣기 OK · 빈 줄 = 슬라이드 구분)</label>
       <textarea id="manualScript" style="min-height:240px" placeholder="**슬라이드 1**&#10;제목: ...&#10;상세 대본: ...&#10;&#10;(또는 문단별로 붙여넣기 — 문단 = 슬라이드 1장)"></textarea>
       <div class="toolbar" style="margin-top:.5rem">
         <button id="copyScriptBtn" class="secondary">📋 대본 전체 복사 (NotebookLM 소스로 붙여넣기)</button>
+        <button id="reviewBtn" class="secondary">✅ 대본 자동 검수</button>
         <span id="copyScriptStatus" class="hint"></span>
       </div>
-      <p class="hint">💡 <b>상세 대본</b>이 ③ 음성/자막에서 <b>SuperTonic3가 읽는 목소리 대본</b>이 됩니다. (화면 텍스트는 슬라이드용)</p>
+      <p class="hint">💡 <b>상세 대본</b>이 ③ 음성/자막에서 <b>TTS가 읽는 목소리 대본</b>이 됩니다. (화면 텍스트는 슬라이드용) · ✅ 검수 = RAG 근거와 대조해 누락/부정확 점검(근거 자료 학습 필요).</p>
+      <details id="reviewBox" class="hidden" style="margin-top:.4rem"><summary class="hint">✅ 검수 결과 보기</summary><pre id="reviewOut" class="logs" style="max-height:300px"></pre></details>
     </div>
 
     <div class="card">
       <h3>NotebookLM 렌더 코드 <span class="hint">· NotebookLM 챗에 붙여넣어 슬라이드 생성</span></h3>
       <div class="row" style="max-width:420px">
-        <div><label>총 슬라이드</label><input id="rcTotal" type="number" value="40" min="4" max="120"></div>
-        <div><label>한 번에(청크)</label><input id="rcChunk" type="number" value="20" min="5" max="40"></div>
+        <div><label>총 슬라이드</label><input id="rcTotal" type="number" value="60" min="4" max="120"></div>
+        <div><label>한 번에(청크) · 기본 20 (작을수록 일관성↑·실행↑)</label><input id="rcChunk" type="number" value="20" min="3" max="40"></div>
       </div>
       <div class="toolbar" style="margin-top:.6rem">
+        <button id="designToggle" type="button" class="secondary small">🎨 디자인 시스템 ▾</button>
+        <select id="designPreset" style="max-width:280px"></select>
+        <span class="hint">모든 청크에 공통 적용 → 슬라이드 일관성</span>
+      </div>
+      <div id="designPanel" class="hidden" style="margin-top:.5rem; padding:.7rem; border:1px solid var(--border); border-radius:8px; background:var(--bg)">
+        <label style="margin-top:0">프리셋 제목 (한글로 적당히)</label>
+        <input id="designName" value="기본 · 플랫 벡터(파랑 강조)">
+        <label>디자인 시스템 (영문 권장 · 모든 청크에 공통 적용)</label>
+        <textarea id="designSystem" style="min-height:170px; font-size:.82rem; font-family:ui-monospace,Consolas,monospace">Style: Flat Vector, Clean Illustration (Pure white background #FFFFFF)
+Typography: Clean Sans-serif fonts (Title: Bold, Body: Regular)
+Layout: Keep it spacious; Max 5 bullet points per slide
+Tone: Professional, scholarly, and organized
+Crucial:
+Use "Noun-ending" or "Short-form" for all texts.
+Maintain strict visual consistency with previous parts.
+Use point colors (e.g., Deep Blue) for emphasis.</textarea>
+        <div class="toolbar" style="margin-top:.5rem">
+          <button id="designSaveBtn" type="button">💾 프리셋 저장</button>
+          <span id="designStatus" class="hint">내가 만든 디자인을 저장해두고 다음에 골라 쓰세요.</span>
+        </div>
+      </div>
+      <div class="toolbar" style="margin-top:.6rem">
+        <button id="rcRecommendBtn" type="button" class="secondary small">📐 대본 보고 추천</button>
         <button id="rcGenBtn" class="secondary">렌더 코드 생성</button>
         <button id="rcCopyBtn" class="secondary hidden">📋 복사</button>
+        <span id="rcRecommend" class="hint"></span>
       </div>
       <textarea id="rcOut" class="logs" style="min-height:150px; margin-top:.5rem; display:none" readonly></textarea>
       <p class="hint"><b>사용법(NotebookLM):</b><br>
         1) 위 <b>대본</b>을 NotebookLM에 <b>소스(자료)로 추가</b> ([+ 소스 추가] → 복사된 텍스트 붙여넣기)<br>
-        2) 이 <b>코드를 챗에 붙여넣고 전송</b> → 슬라이드덱 2개(1~20, 21~40) 생성<br>
+        2) 이 <b>코드를 챗에 붙여넣고 전송</b> → 슬라이드덱 생성 (60장 = 20×3회)<br>
         3) 각 슬라이드덱을 <b>PDF로 다운로드</b> → ② 이미지에 순서대로 넣기<br>
-        ※ 코드 안에 대본을 넣는 게 아니라, 대본은 '소스', 코드는 '챗 명령'입니다.</p>
+        ※ NotebookLM이 한 번에 ~45장에서 끊기면 청크를 15로 낮추세요(15×4).</p>
     </div>
     <div class="toolbar"><button id="nextImages" class="secondary">다음: ② 이미지 →</button></div>
   </section>
@@ -171,12 +275,12 @@
       <p class="hint">NotebookLM이 만든 슬라이드덱 PDF를 <b>순서대로</b> 넣으세요. (1번째=슬라이드 1~20, 2번째=21~40, 3번째=41~60) 채우는 대로 이미지를 만들어 아래에 씬별로 보여줍니다.</p>
       <div id="pdfSlots"></div>
       <div id="imgStatus" class="hint" style="margin-top:.5rem"></div>
-      <div id="thumbs" class="slides" style="margin-top:.8rem"></div>
+      <div id="thumbs" class="thumbs" style="margin-top:.8rem"></div>
     </div>
     <div class="toolbar"><button id="nextAudio" class="secondary">다음: ③ 음성/자막 →</button></div>
   </section>
 
-  <!-- ③ 음성/자막 (저장 + SuperTonic3/무음) -->
+  <!-- ③ 음성/자막 -->
   <section class="panel hidden" data-panel="audio">
     <div class="card">
       <h3>③ 번들 저장</h3>
@@ -186,42 +290,34 @@
         <div><label>번들 제목</label><input id="bundleTitle" value="VOD Studio Deck"></div>
         <div><label>&nbsp;</label><button id="saveBtn">💾 번들 저장</button></div>
       </div>
-      <label>목소리 (SuperTonic3/VoiceWright · 남5·여5)</label>
-      <select id="voiceStyle" style="max-width:420px">
-        <option value="narrator">기본 내레이터 (M5)</option>
-        <optgroup label="남성">
-          <option value="young_male">남1 · 젊은 (M1)</option>
-          <option value="warm_male">남2 · 따뜻한 (M2)</option>
-          <option value="calm_male">남3 · 차분한 (M3)</option>
-          <option value="energetic_male">남4 · 활기찬 (M4)</option>
-          <option value="deep_male">남5 · 깊은 (M5)</option>
-        </optgroup>
-        <optgroup label="여성">
-          <option value="young_female">여1 · 젊은 (F1)</option>
-          <option value="warm_female">여2 · 따뜻한 (F2)</option>
-          <option value="calm_female">여3 · 차분한 (F3)</option>
-          <option value="energetic_female">여4 · 활기찬 (F4)</option>
-          <option value="mature_female">여5 · 성숙한 (F5)</option>
-        </optgroup>
-      </select>
-      <p class="hint">번들 JSON의 각 씬 <code>voice_style</code>로 저장됩니다. VoiceWright가 이 값을 보고 목소리를 정해요. (씬별로 다른 목소리는 추후 지원)</p>
-      <label>출력 폴더 (mediaforge 프로젝트 경로)</label>
-      <input id="outputDir" placeholder="예: D:\00work\260602-tech-historybook150  (비우면 앱 내부)">
+      <p class="hint">목소리는 ① 대본 탭 상단에서 고른 값(<span id="voiceEcho">기본</span>)이 전체 기본으로 저장됩니다. 씬별로 다르게 하려면 아래 카드에서 바꾸세요.</p>
+      <label>출력 폴더 (mediaforge 프로젝트 경로 · 비우면 앱 내부)</label>
+      <input id="outputDir" placeholder="예: D:\00work\inputs  (5개 폴더는 여기 _assets\chNN_bundle\ 안에 생성)">
       <div id="saveStatus" class="hint" style="margin-top:.4rem"></div>
       <div id="saveResult" style="margin-top:.4rem"></div>
-      <details style="margin-top:.5rem"><summary class="hint">생성된 chNN_script.json 미리보기 (원래 쓰던 형식과 동일)</summary>
+      <details style="margin-top:.5rem"><summary class="hint">생성된 chNN_script.json 미리보기</summary>
         <pre id="jsonPreview" class="logs" style="max-height:300px"></pre></details>
     </div>
 
     <div class="card">
-      <h3>음성 / 자막</h3>
-      <div id="audioStatus" class="hint">번들 저장 후 확인됩니다.</div>
-      <div class="toolbar" style="margin-top:.5rem">
-        <button id="genAudioBtn" class="secondary">무음 오디오 생성 (미리보기용)</button>
+      <h3>음성 / 자막 (로컬 CPU TTS)</h3>
+      <div class="toolbar">
+        <button id="synthAllBtn">🔊 전체 음성/자막 생성</button>
+        <button id="pronDictBtn" class="secondary">📖 발음 사전</button>
+        <span id="audioStatus" class="hint">번들 저장 후 사용할 수 있어요.</span>
       </div>
-      <p class="hint">• <b>무음</b>: 대본 길이만큼 소리 없는 음성 — 영상 모양만 빠르게 확인용.<br>
-         • <b>진짜 음성</b>: SuperTonic3로 만든 WAV를 번들의 <code>audio\chNN_XX_narration.wav</code> 로 넣으면 그 목소리로 렌더됩니다.<br>
-         • 자막은 mp4maker가 대본으로 자동 생성합니다.</p>
+      <div class="bar hidden" id="synthBar"><div id="synthBarFill"></div></div>
+      <p class="hint">발음이 이상하면 ① <b>발음 사전</b>에 단어를 추가하고 → 그 씬만 🔁 재생성하세요. (발음 사전은 TTS 입력에만 적용, 자막 원문은 유지) 싱크가 어긋나면 타이밍을 직접 조정/저장.</p>
+      <div id="pronPanel" class="hidden" style="margin-top:.6rem; padding:.8rem; border:1px solid var(--border); border-radius:8px; background:var(--bg)">
+        <p class="hint" style="margin:0 0 .4rem">한 줄에 하나: <code>원문 =&gt; 발음</code> (예: <code>KOSHA =&gt; 코샤</code>, <code>MSDS =&gt; 엠에스디에스</code>). 영문 약어·헷갈리는 한자어를 넣어두면 그 발음으로 읽습니다.</p>
+        <textarea id="pronText" style="min-height:220px; font-family:ui-monospace,Consolas,monospace; font-size:.85rem"></textarea>
+        <div class="toolbar" style="margin-top:.5rem">
+          <button id="pronSaveBtn">💾 발음 사전 저장</button>
+          <button id="pronCloseBtn" class="secondary">닫기</button>
+          <span id="pronStatus" class="hint"></span>
+        </div>
+      </div>
+      <div id="sceneCards" style="margin-top:.8rem"></div>
     </div>
     <div class="toolbar"><button id="nextVideo" class="secondary">다음: ④ 영상 →</button></div>
   </section>
@@ -229,27 +325,84 @@
   <!-- ④ 영상 (mp4maker 렌더) -->
   <section class="panel hidden" data-panel="video">
     <div class="card">
-      <h3>④ 영상 — mp4maker 렌더</h3>
+      <h3>④ 영상 — mp4maker 합성</h3>
       <div class="row" style="max-width:640px">
         <div><label>모드</label>
           <select id="renderMode">
+            <option value="voiced">음성 포함 (생성한 WAV)</option>
             <option value="silent">무음 미리보기</option>
-            <option value="voiced">음성 포함 (audio WAV)</option>
           </select></div>
         <div><label>해상도</label>
           <select id="resolution">
             <option value="1280x720">1280x720 (빠름)</option>
-            <option value="1920x1080">1920x1080</option>
+            <option value="1920x1080" selected>1920x1080</option>
+          </select></div>
+      </div>
+      <label class="toolbar" style="margin-top:.7rem; cursor:pointer">
+        <input type="checkbox" id="noSubtitles" style="width:auto" checked>
+        <span>자막 굽지 않기 (유튜브용 <b>클린 영상</b> + <code>.srt</code> 별도) — <code>chNN_final_nosub.mp4</code> · 기본 권장. (해제하면 자막 구운 <code>chNN_final.mp4</code>)</span>
+      </label>
+      <div class="toolbar" style="margin-top:.6rem">
+        <button id="dryRunBtn" class="secondary">🔍 검증만 (dry-run)</button>
+        <button id="renderBtn">🎬 풀 렌더</button>
+        <button id="clearDraftBtn" class="secondary">🗑 기존 결과 삭제</button>
+        <button id="openDraftBtn" class="secondary">📂 결과 폴더 열기</button>
+        <a id="videoLink" class="hidden" href="#" target="_blank"><button class="secondary" type="button">새 탭에서 재생</button></a>
+      </div>
+      <div class="bar" id="renderBar" style="display:none"><div id="renderBarFill"></div></div>
+      <h3 style="margin-top:1rem">진행 로그</h3>
+      <div id="renderLogs" class="logs" style="min-height:120px"></div>
+      <video id="player" class="hidden" controls style="width:100%; margin-top:.8rem; border:1px solid var(--border); border-radius:8px; background:#000"></video>
+      <p class="hint" style="margin-top:.6rem">자막 굽지 않기 = 유튜브에 깨끗한 영상 올리고, 같은 폴더의 <code>.srt</code>를 유튜브 자막으로 따로 업로드하세요.</p>
+    </div>
+
+    <div class="card">
+      <h3>🎞️ 쇼츠 생성 (세로 9:16)</h3>
+      <p class="hint">핵심 장면으로 30초 세로 쇼츠를 만듭니다. 상단 후크 · 중앙 이미지 · 하단 자막의 3분할이 구간마다 바뀌고, 마지막에 원본 영상 CTA가 붙어요.</p>
+      <div class="row" style="max-width:640px">
+        <div style="flex:2"><label>원본 영상 URL (설명·CTA용)</label>
+          <input id="shortsUrl" type="text" placeholder="https://youtu.be/..."></div>
+        <div><label>길이(초)</label>
+          <select id="shortsDuration">
+            <option value="30" selected>30 (최대)</option>
+            <option value="20">20</option>
+            <option value="15">15</option>
+          </select></div>
+        <div><label>하단</label>
+          <select id="shortsBottom">
+            <option value="subtitle" selected>자막</option>
+            <option value="chat">댓글풍</option>
           </select></div>
       </div>
       <div class="toolbar" style="margin-top:.6rem">
-        <button id="renderBtn">영상 렌더 시작</button>
-        <a id="videoLink" class="hidden" href="#" target="_blank"><button class="secondary" type="button">새 탭에서 열기</button></a>
+        <button id="shortsGenBtn">🎬 쇼츠 생성</button>
+        <a id="shortsLink" class="hidden" href="#" target="_blank"><button class="secondary" type="button">새 탭에서 재생</button></a>
+        <span id="shortsStatus" class="hint"></span>
       </div>
-      <div class="bar" id="renderBar" style="display:none"><div id="renderBarFill" style="background:var(--accent2)"></div></div>
-      <div id="renderLogs" class="logs hidden" style="margin-top:.6rem"></div>
-      <video id="player" class="hidden" controls style="width:100%; margin-top:.8rem; border:1px solid var(--border); border-radius:8px; background:#000"></video>
-      <p class="hint" style="margin-top:.6rem">같은 번들을 mediaforge(mp4maker)에서 열어 더 다듬을 수도 있어요.</p>
+      <div class="bar" id="shortsBar" style="display:none"><div id="shortsBarFill"></div></div>
+      <div id="shortsLogsWrap" class="hidden">
+        <div id="shortsLogs" class="logs" style="min-height:80px; margin-top:.5rem"></div>
+      </div>
+      <video id="shortsPlayer" class="hidden" controls style="width:auto; max-height:520px; aspect-ratio:9/16; margin-top:.8rem; border:1px solid var(--border); border-radius:8px; background:#000"></video>
+      <div class="toolbar" style="margin-top:.8rem">
+        <button id="shortsMetaBtn" class="secondary">📺 쇼츠 메타 생성</button>
+        <button id="shortsMetaCopyBtn" class="secondary hidden">📋 복사</button>
+        <button id="shortsMetaClearBtn" class="secondary hidden">🗑 삭제</button>
+        <span id="shortsMetaStatus" class="hint"></span>
+      </div>
+      <pre id="shortsMetaOut" class="logs hidden" style="max-height:none; margin-top:.5rem"></pre>
+    </div>
+
+    <div class="card">
+      <h3>📺 유튜브 업로드 메타</h3>
+      <p class="hint">대본(+자막)으로 제목·설명·태그·챕터(타임스탬프)를 자동 생성합니다. 자막이 있으면 챕터 시간도 잡아줘요.</p>
+      <div class="toolbar">
+        <button id="ytMetaBtn" class="secondary">📺 유튜브 메타 생성</button>
+        <button id="ytCopyBtn" class="secondary hidden">📋 복사</button>
+        <button id="ytClearBtn" class="secondary hidden">🗑 삭제</button>
+        <span id="ytStatus" class="hint"></span>
+      </div>
+      <pre id="ytOut" class="logs hidden" style="max-height:none; margin-top:.5rem"></pre>
     </div>
   </section>
 </main>

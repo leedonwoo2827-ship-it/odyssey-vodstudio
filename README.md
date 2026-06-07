@@ -1,508 +1,95 @@
-# 영상공방 (Odyssey VOD Studio)
+# 영상공방 (VOD Studio)
 
-> **[odysseus](https://github.com/pewdiepie-archdaemon/odysseus) 포크 + 커스터마이징.**
-> NotebookLM(구글 Pro 계정)으로 **슬라이드 이미지 + per-slide 내레이션 대본**을 뽑아
-> [mp4maker](https://github.com/leedonwoo2827-ship-it/mp4maker) 호환 번들을 만들고, 그대로 **MP4 렌더**까지 잇는다.
-> 문서공방([odyssey-munseo-gongbang](https://github.com/leedonwoo2827-ship-it/odyssey-munseo-gongbang))이
-> 문서를 만들었다면, 영상공방은 영상을 만든다.
->
-> **추가된 것:** `src/google_oauth.py`(Google 로그인) · `services/notebooklm_service.py`(`nlm` CLI 래퍼) ·
-> `services/vodstudio/*`(3단계 워크플로우·검수·번들·mp4maker 렌더) · `routes/vodstudio_routes.py` ·
-> `static/vodstudio/*`(UI, `/vodstudio`). 설정/사용법은 [`knowledge/`](knowledge/) 폴더 참고.
->
-아래는 베이스가 된 odysseus 원본 README보다 먼저, **영상공방 설치/실행**을 정리한 것입니다.
+소스 문서(법령·보고서 등)를 넣으면 **대본 → 슬라이드 이미지 → 음성/자막 → MP4**까지 한 흐름으로 만드는 로컬 영상 제작 도구입니다.
+NotebookLM 슬라이드 스타일이나 대본 기반 제작을 좋아하는 분들을 위한 워크플로우.
 
-## ⚙ 설치 & 실행 (Windows)
+- **API 키 불필요** — 대본 생성은 본인 계정(ChatGPT 또는 Google)에 로그인한 CLI에 위임.
+- **도커·외부 서비스 불필요** — TTS·RAG 모두 **로컬에서** 동작(클라우드 없음).
+- 결과물은 [mp4maker](https://github.com/leedonwoo2827-ship-it/mp4maker) 호환 번들 → 그대로 MP4 렌더.
 
-### 0. 사전 준비 — 터미널(PowerShell)에서 한 줄씩 (없는 것만)
-> `setup.bat` 누르기 전에 Python·git·ffmpeg 가 있어야 합니다. 이미 있으면 건너뛰세요.
-```powershell
-winget install Python.Python.3.12
-```
-```powershell
-winget install Git.Git
-```
-```powershell
-winget install Gyan.FFmpeg
-```
-설치 후 **새 터미널**을 열어 확인: `python --version` / `git --version` / `ffmpeg -version`
-
-### 1. 설치 & 실행 (더블클릭)
-1. **`setup.bat`** — venv·의존성 설치 + mp4maker 클론 + 환경 점검 (`.env` 자동 생성)
-2. **`run.bat`** — 웹 서버 실행, 브라우저가 `http://127.0.0.1:7000/vodstudio` 자동 오픈
-
-➡ **직접 입력(수동) 모드는 여기까지로 바로 사용** — 대본 붙여넣기 + 슬라이드 PDF 업로드 → 영상.
-**로그인·API 키 불필요.**
-
-### 2. (선택) Gemini CLI — API 키 없이 구글 로그인으로 대본 생성
-터미널에서 한 줄씩:
-```powershell
-winget install OpenJS.NodeJS.LTS
-```
-```powershell
-npm install -g @google/gemini-cli
-```
-```powershell
-gemini
-```
-(`gemini` 실행 시 브라우저로 **구글 계정 로그인** — API 키 입력 없음. 회사 Workspace 계정은 막힐 수 있어 개인 Gmail 권장.)
-
-### 3. (선택) NotebookLM 자동 모드
-```powershell
-venv\Scripts\nlm login
-```
-(크롬으로 구글 로그인 → 노트북에서 슬라이드/대본 자동 생성. 쿠키 2~4주 유지.)
-
-> 상세 가이드: [`knowledge/`](knowledge/) — google-oauth-setup · gemini-cli-setup · vodstudio-usage
+> 같은 odysseus 베이스의 [문서공방](https://github.com/leedonwoo2827-ship-it/odyssey-munseo-gongbang)이 문서를 만든다면, **영상공방은 영상을 만든다.**
 
 ---
 
-# Odysseus (원본 README)
+## ✨ 기능
 
-```
-───────────────────────────────────────────────
- ⊹ ࣪ ˖ ૮( ˶ᵔ ᵕ ᵔ˶ )っ  Odysseus vers. 1.0
-───────────────────────────────────────────────
-```
-
-![Odysseus](docs/odysseus.jpg)
-
-A self-hosted AI workspace -- meant to be the self-hosted version of the UI experience you get from ChatGPT and Claude. But with more jank and fun. Running on your own hardware, with your own data -- local-first, privacy-first, and no trojan.
-
-## Features
-  - **Chat** -- chat with any local model or API; adding them is super simple.<br>　<sub>vLLM · llama.cpp · Ollama · OpenRouter · OpenAI</sub>
-  - **Agent** -- hand it tools and let it run the whole task itself.<br>　<sub>built on [opencode](https://github.com/anomalyco/opencode) · MCP · web · files · shell · skills · memory</sub>
-  - **Cookbook** -- Scans your hardware, recommends models, click to download and serve.. easy!<br>　<sub>built on [llmfit](https://github.com/AlexsJones/llmfit) · VRAM-aware · GGUF / FP8 / AWQ · fit scoring · vLLM / llama.cpp serving</sub>
-  - **Deep Research** -- multi-step runs that gather, read, and synthesize sources into a nice visual report.<br>　<sub>adapted from [Tongyi DeepResearch](https://github.com/Alibaba-NLP/DeepResearch)</sub>
-  - **Compare** -- a fun tool to compare models side by side. Test completely blind, no bias!<br>　<sub>multi-model · blind test · synthesis</sub>
-  - **Documents** -- YOU write the text, AI is there to assist, not the opposite.<br>　<sub>multi-tab editor · markdown · HTML · CSV · syntax highlighting · AI edits · suggestions</sub>
-  - **Memory / Skills** -- Persistent memory and skills, your agent evolves over time as it better understands you and your tasks!<br>　<sub>ChromaDB · fastembed (ONNX) · vector + keyword retrieval · import/export</sub>
-  - **Email** -- IMAP/SMTP inbox with AI triage built in: urgency reminders, auto-tag, auto-summary, auto-reply drafts, auto-spam.<br>　<sub>IMAP · SMTP · per-account routing · CalDAV-aware</sub>
-  - **Notes & Tasks** -- Quick notes with reminders, a todo list, and scheduled tasks the agent can act on.<br>　<sub>note pings · checklist · cron-style tasks · ntfy / browser / email channels</sub>
-  - **Calendar** -- Local-first calendar with CalDAV sync to Radicale / Nextcloud / Apple / Fastmail.<br>　<sub>CalDAV pull · .ics import/export · per-calendar colors · agent-aware</sub>
-  - **Works on mobile** -- looks and runs great on your phone, not just desktop.<br>　<sub>responsive · installable (PWA) · touch gestures</sub>
-  - **Extras** -- more to explore, happy if you give it a go!<br>　<sub>image editor · theme editor · file uploads (vision + PDF) · web search · presets · sessions · 2FA</sub>
-
-## Demo
-A full, hover-to-play tour lives on the landing page (`docs/index.html`).
-
-<details>
-<summary>Screenshots / clips</summary>
-
-### Chat & Agents
-![Chat & Agents](docs/chat.gif)
-### Deep Research
-![Deep Research](docs/research.gif)
-### Compare
-![Compare](docs/compare.gif)
-### Documents
-![Documents](docs/document.gif)
-### Notes & Tasks
-![Notes & Tasks](docs/notes.gif)
-
-</details>
-
-## Quick Start
-
-Defaults work out of the box: clone, run, then configure models/search/email
-inside **Settings**. Only edit `.env` for deployment-level overrides like
-`APP_BIND`, `APP_PORT`, `AUTH_ENABLED`, `DATABASE_URL`, or a pre-seeded admin password.
-
-On first setup, Odysseus creates an admin account (`admin` unless
-`ODYSSEUS_ADMIN_USER` is set) and prints a temporary password in the terminal.
-For Docker installs, the same line is in `docker compose logs odysseus`.
-Use that for the first login, then change it in **Settings**.
-
-Contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, testing, and
-pull request guidelines.
-
-### Docker (recommended)
-```bash
-git clone https://github.com/pewdiepie-archdaemon/odysseus.git
-cd odysseus
-cp .env.example .env       # optional, but recommended for explicit defaults
-docker compose up -d --build
-```
-Open `http://localhost:7000` when the containers are healthy. Docker Compose
-binds the web UI to `127.0.0.1` by default. If the port is taken, set
-`APP_PORT=7001` in `.env` and recreate the container. Set `APP_BIND=0.0.0.0`
-only when you intentionally want LAN/reverse-proxy access.
-
-### Native Linux / macOS
-```bash
-git clone https://github.com/pewdiepie-archdaemon/odysseus.git
-cd odysseus
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python setup.py
-python -m uvicorn app:app --host 127.0.0.1 --port 7000
-```
-Requirements: Python 3.11+. Cookbook also needs `tmux` for background model
-downloads and serves. The app itself is lightweight; local model serving is the
-heavy part and depends on the model, runtime, GPU, and VRAM, so small hosts can
-connect to API or remote model servers instead. Use `--host 0.0.0.0` only when you intentionally want LAN/reverse-proxy access.
-
-### Apple Silicon
-Docker on macOS cannot use the Metal GPU. For GPU-accelerated Cookbook on an
-M-series Mac, run Odysseus natively:
-
-```bash
-git clone https://github.com/pewdiepie-archdaemon/odysseus.git
-cd odysseus
-./start-macos.sh
-```
-
-It launches at `http://127.0.0.1:7860`. To expose it to your phone over a trusted LAN/VPN such as Tailscale, bind all interfaces:
-
-```bash
-ODYSSEUS_HOST=0.0.0.0 ./start-macos.sh
-# then open http://<tailscale-ip>:7860
-```
-
-The script also reads `.env` at startup, so `APP_BIND=0.0.0.0` and `APP_PORT`
-set there are picked up automatically without a command-line override each run.
-
-Keep `AUTH_ENABLED=true` (the default) before binding outside loopback. Do not
-expose this port directly to the public internet. To build a clickable app wrapper:
-
-```bash
-./build-macos-app.sh
-```
-
-<details>
-<summary>Cookbook, GPU, Ollama, and troubleshooting notes</summary>
-
-**Docker bundled services.** Compose starts Odysseus, ChromaDB, SearXNG, and
-ntfy. Odysseus and the bundled service ports bind to `127.0.0.1` by default, so
-they are reachable from the host but not exposed to your LAN/public internet
-unless you opt in.
-
-**Cookbook storage in Docker.** Downloads live in `./data/huggingface`
-(`~/.cache/huggingface` in the container). Cookbook-installed Python CLIs and
-serve engines live in `./data/local` (`~/.local` in the container), so they
-survive container recreation.
-
-**Remote servers.** In **Cookbook -> Settings -> Servers**, generate the
-Odysseus SSH key and add the public key to the remote server's
-`~/.ssh/authorized_keys`. From the host you can also run:
-
-```bash
-ssh-copy-id -i data/ssh/id_ed25519.pub user@server
-```
-
-**Docker GPU overlays.** CPU-only users can skip this section. Cookbook can
-only detect GPUs that Docker exposes to the container — if the host runtime or
-device passthrough is not configured, Cookbook sees the iGPU, another card, or
-CPU instead of your intended GPU.
-
-For NVIDIA, `scripts/check-docker-gpu.sh` diagnoses GPU passthrough and can
-optionally install the host runtime or update `.env`.
-
-```bash
-# Read-only diagnostic (default — installs nothing, never edits .env):
-scripts/check-docker-gpu.sh
-
-# Print OS-specific install commands without running them:
-scripts/check-docker-gpu.sh --print-install-commands
-
-# Install NVIDIA Container Toolkit on Ubuntu/Debian (requires sudo):
-scripts/check-docker-gpu.sh --install-nvidia-toolkit
-
-# Write COMPOSE_FILE to .env (only when GPU passthrough is confirmed working):
-scripts/check-docker-gpu.sh --enable-nvidia-overlay
-
-# Full assisted setup — install toolkit, then enable overlay if passthrough works:
-scripts/check-docker-gpu.sh --install-nvidia-toolkit --enable-nvidia-overlay
-```
-
-Safety notes:
-- The app never installs host GPU runtime automatically.
-- The app never edits `.env` automatically.
-- `.env` is only modified when `--enable-nvidia-overlay` is explicitly passed,
-  and only after GPU passthrough succeeds. `--yes` skips prompts but does not
-  bypass the passthrough gate.
-- `.env.bak.*` backups created by `--enable-nvidia-overlay` are ignored by
-  Git and the Docker build context.
-
-To enable manually without the script, add this to `.env`:
-
-```bash
-COMPOSE_FILE=docker-compose.yml:docker/gpu.nvidia.yml
-```
-
-**AMD / ROCm.** AMD setup is read-only diagnostic plus manual `.env` edit. Run:
-
-```bash
-scripts/check-docker-amd-gpu.sh
-```
-
-Then add the reported values to `.env`, replacing `RENDER_GID` with your host's
-numeric render group id:
-
-```bash
-COMPOSE_FILE=docker-compose.yml:docker/gpu.amd.yml
-RENDER_GID=989
-```
-
-For NVIDIA/AMD GPU support, also read the comments in the selected overlay file: docker/gpu.nvidia.yml or docker/gpu.amd.yml.
-
-**Stack-management UIs (Portainer, Coolify, Dockhand, etc.).** These tools
-often accept only a single Compose file and do not reliably honor `COMPOSE_FILE`
-or multiple `-f` overlays. CLI users should keep using the `COMPOSE_FILE`
-overlay workflow above. For stack UIs, point the stack at one of the standalone
-files instead, which bundle the base stack plus the GPU settings:
-
-- `docker-compose.gpu-nvidia.yml` — still requires the NVIDIA Container Toolkit
-  on the host.
-- `docker-compose.gpu-amd.yml` — still requires host ROCm/kfd/DRI setup, the
-  `video`/`render` group membership, and `RENDER_GID` when needed.
-
-The base `docker-compose.yml` plus the `docker/gpu.*.yml` overlays remain the
-source of truth; the standalone files mirror them for single-file deployments.
-
-Verify after enabling either overlay:
-
-```bash
-docker compose exec odysseus nvidia-smi -L   # NVIDIA
-docker compose exec odysseus sh -lc 'test -e /dev/kfd && test -d /dev/dri && ls -l /dev/kfd /dev/dri/renderD*'  # AMD
-```
-
-> **GPU passthrough ≠ llama.cpp CUDA.** `nvidia-smi` passing inside the
-> container confirms Docker GPU access, but llama.cpp also needs `cudart` and
-> the CUDA Toolkit at runtime. If Cookbook logs show `Unable to find cudart
-> library`, `Could NOT find CUDAToolkit`, `CUDA Toolkit not found`, or
-> tensors/layers assigned to CPU, that is a Cookbook/llama.cpp build issue —
-> not a Docker passthrough failure. Re-install the serve engine via
-> **Cookbook → Dependencies** to get a CUDA-enabled build.
->
-> The same split applies to AMD/ROCm: seeing `/dev/kfd` and `/dev/dri` inside
-> the container confirms device passthrough, not ROCm userspace or a
-> ROCm-enabled vLLM/llama.cpp build. `rocm-smi` and `rocminfo` are not expected
-> inside the slim Odysseus image.
-
-**Ollama with Docker.** If Ollama runs on the host, add this endpoint in
-Settings:
-
-```text
-http://host.docker.internal:11434/v1
-```
-
-Ollama must listen outside its own loopback interface:
-
-```bash
-OLLAMA_HOST=0.0.0.0:11434 ollama serve
-```
-
-This connects Odysseus in Docker to an Ollama server that is already running on
-your host machine; it does not start Ollama inside the container.
-`host.docker.internal` is Docker's hostname for the host machine from inside the
-container. Cookbook **Serve** is a separate workflow for serving downloaded
-models through Odysseus/llama.cpp, so Windows users with an existing Ollama
-install usually only need to add the endpoint in Settings.
-
-**Useful checks.**
-
-```bash
-docker compose ps
-docker compose logs --tail=120 odysseus
-docker compose logs odysseus | grep -E 'ChromaDB|MemoryVectorStore|DEGRADED'
-```
-
-**macOS details.** `start-macos.sh` installs Homebrew deps, creates the venv,
-runs setup, and starts uvicorn on port `7860` because AirPlay often holds
-`7000`. It uses llama.cpp/Ollama for Metal. vLLM/SGLang are CUDA/ROCm-only and
-do not run on macOS. MLX-only models are not served by Odysseus.
-
-</details>
-
-### Native Windows
-
-**One-command launcher** (creates the venv, installs deps, runs setup, starts the
-server; safe to re-run):
-
-```powershell
-git clone https://github.com/pewdiepie-archdaemon/odysseus.git
-cd odysseus
-powershell -ExecutionPolicy Bypass -File .\launch-windows.ps1
-```
-
-Or do it by hand:
-
-```powershell
-git clone https://github.com/pewdiepie-archdaemon/odysseus.git
-cd odysseus
-py -3.11 -m venv venv
-venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python setup.py
-python -m uvicorn app:app --host 127.0.0.1 --port 7000
-```
-
-If `python` points at an older interpreter, use `py -3.12` (or another installed
-3.11+ version) for the venv step.
-
-**Requirements:** Python 3.11+. The core app (chat, agent, memory, documents,
-email, calendar, deep research) runs fully native. For full **Cookbook** background
-model downloads and the agent shell tool, also install
-[Git for Windows](https://git-scm.com/download/win) (provides `bash.exe`).
-Local GPU *serving* of vLLM/SGLang needs Linux/WSL2; for a local model on Windows,
-[Ollama](https://ollama.com/download) is the easiest path — point Odysseus at
-`http://localhost:11434/v1` in Settings.
-
-Open `http://localhost:7000`, log in with the generated admin password,
-and configure everything else inside **Settings**.
-
-## Troubleshooting & Advanced Setup
-
-### `chromadb-client` conflicts with embedded ChromaDB
-If `chromadb-client` (the lightweight HTTP-only package) is installed alongside the full `chromadb` package, Odysseus starts but ChromaDB silently falls back to HTTP-only mode and fails.
-
-**Fix:** uninstall `chromadb-client` and force-reinstall the full package:
-```bash
-./venv/bin/pip uninstall chromadb-client -y
-./venv/bin/pip install --force-reinstall chromadb
-```
-
-### HTTPS + LAN/Tailscale exposure
-To expose Odysseus on a local network or Tailscale with HTTPS:
-1. Change the bind address to `0.0.0.0` in `.env` (`APP_BIND=0.0.0.0` or `ODYSSEUS_HOST=0.0.0.0`).
-2. Generate a locally-trusted cert for your LAN/Tailscale IPs using [mkcert](https://github.com/FiloSottile/mkcert):
-   ```bash
-   mkcert -install
-   mkcert -cert-file cert.pem -key-file key.pem 192.168.1.100 tailscale-ip
-   ```
-3. Run `uvicorn` with the generated certs:
-   ```bash
-   python -m uvicorn app:app --host 0.0.0.0 --port 7000 --ssl-certfile=cert.pem --ssl-keyfile=key.pem
-   ```
-4. Install the `mkcert` CA on any other device you want to access Odysseus from (e.g., for iOS, email the `rootCA.pem` to yourself, install the profile, and trust it in Certificate Trust Settings).
-
-### Optional Dependencies
-`requirements-optional.txt` contains packages that unlock extra features. It is not installed by default.
-
-| Package | Feature unlocked |
-|---------|-----------------|
-| `faster-whisper` | Local speech-to-text (microphone -> text) via the "local" STT provider. |
-| `duckduckgo-search` | DuckDuckGo as a search provider option. |
-| `PyMuPDF` | PDF page rendering in the side viewer panel and form-filling. (Note: AGPL-3.0) |
-| `markitdown` | Office/EPUB document text extraction (converts .docx/.xlsx/.pptx/.xls/.epub to Markdown). |
-
-## Security Notes
-Odysseus is a self-hosted workspace with powerful local tools: shell access, file uploads, model downloads, web research, email/calendar integrations, and API tokens. Treat it like an admin console.
-
-- Keep `AUTH_ENABLED=true` for any network-accessible deployment.
-- Keep `LOCALHOST_BYPASS=false` outside local development.
-- Use `SECURE_COOKIES=true` when Odysseus is served through HTTPS by a trusted reverse proxy or private access gateway.
-- Do not expose it directly to the public internet without HTTPS and a trusted reverse proxy or private access layer.
-- Keep `.env`, `data/`, `logs/`, databases, uploads, generated media, backups, auth/session files, API keys, and model/provider tokens out of Git and private shares. They are ignored by default.
-- Review `data/auth.json` after first boot: disable open signup unless you intentionally want it, make only your own account admin, and keep demo/test accounts non-admin.
-- Non-admin users do not get shell/Python/file read/write by default, and admin-only routes/tools such as MCP management, API tokens, webhooks, model/cookbook serving, backup/vault, and app settings are admin-gated. Other features are controlled by per-user privileges, so review each user's privileges before exposing a deployment.
-- Rotate any API keys or tokens that were ever pasted into a shared chat, demo, screenshot, or log.
-- If you enable API tokens or webhooks, create separate tokens per integration and delete unused ones.
-- Prefer binding manual development runs to `127.0.0.1`; bind to `0.0.0.0` only when you intentionally want LAN/reverse-proxy access.
-- Keep ChromaDB, SearXNG, ntfy, Ollama, vLLM, llama.cpp, databases, and raw model/provider APIs internal-only. Expose only the authenticated Odysseus web/API entrypoint through your trusted proxy or private access layer.
-- Before publishing a fork, run `git status --short` and confirm no private files from `.env`, `data/`, `logs/`, uploads, backups, or local databases are staged.
-
-### Private or proxied deployments
-Odysseus serves plain HTTP on its app port. Docker Compose binds Odysseus and the bundled services to `127.0.0.1` by default, so a typical production/private setup is:
-
-1. Keep Odysseus on localhost, for example `127.0.0.1:7000`.
-2. Terminate HTTPS at a trusted reverse proxy or private access gateway.
-3. Put the authenticated Odysseus web/API entrypoint behind that layer.
-4. Keep raw service and model ports internal-only.
-
-Cloudflare Access, Tailscale, Caddy, nginx, and Traefik can all fit this pattern; none are required by Odysseus. If your access layer reaches Odysseus on the same host, proxy to `http://127.0.0.1:7000` and keep `AUTH_ENABLED=true`, `LOCALHOST_BYPASS=false`, and `SECURE_COOKIES=true`.
-
-Common internal-only ports from the default docs/compose setup:
-
-| Port | Service |
+| 단계 | 기능 |
 |---|---|
-| `7000` | Odysseus raw app port |
-| `8080` | SearXNG |
-| `8091` | ntfy |
-| `8100` | ChromaDB host port for manual/compose access |
-| `11434` | Ollama |
-| `8000-8020` | Common local model/provider APIs |
+| ① 대본 | **codex(OpenAI/ChatGPT) ↔ agy(Antigravity→Gemini/Google) 토글**, 소스 파일 여러 개 첨부, **📚 RAG(로컬 색인)** · **🔬 자료 딥리서치** · **✅ 대본 자동 검수**, 목소리 미리듣기 |
+| ② 이미지 | NotebookLM 슬라이드 PDF 임포트 → 씬별 그리드. **렌더 코드 생성**(디자인 프리셋·청크 자동 추천) |
+| ③ 음성/자막 | **로컬 CPU TTS(VoiceWright/Supertonic-3, ONNX)** — 씬별 음성/자막 생성·재생성, 자막 타이밍 편집, **📖 발음 사전** |
+| ④ 영상 | mp4maker 합성 — **자막 없는 클린본(유튜브용) + `.srt`** 또는 자막 구운본, dry-run, **📺 유튜브 메타 생성** |
+| 공통 | **📂 번들 불러오기**(재시작 후 이어가기), **🧠 시리즈 메모리**(챕터 간 톤·용어 일관성) |
 
-## Contributing
-Help is welcome. The best entry points are fresh-install testing, provider setup
-bugs, mobile/editor polish, docs, and small focused refactors. See
-[ROADMAP.md](ROADMAP.md) for the current help-wanted list.
+자세한 사용법·설계는 [`knowledge/`](knowledge/) 폴더 참고.
 
-## Configuration
-Most setup is done inside the app with `/setup` or **Settings**. Use `.env`
-for deployment-level defaults and secrets you want present before first boot.
-Key settings:
+---
 
-| Variable | Default | Description |
-|---|---|---|
-| `LLM_HOST` | `localhost` | Your LLM server (e.g. `llm-host.local:8000`) |
-| `LLM_HOSTS` | -- | Comma-separated list for model discovery |
-| `OPENAI_API_KEY` | -- | Optional OpenAI key. Prefer adding providers in the app unless pre-seeding. |
-| `SEARXNG_INSTANCE` | `http://localhost:8080` | SearXNG URL. Docker overrides this to `http://searxng:8080`. |
-| `SEARXNG_SECRET` | generated on first Docker boot | Optional SearXNG cookie/CSRF secret. Leave blank unless you need to pin it. |
-| `APP_BIND` | `127.0.0.1` | Docker Compose host bind address for the web UI. Use `0.0.0.0` only for intentional LAN/reverse-proxy access. |
-| `APP_PORT` | `7000` | Docker Compose host port for the web UI. |
-| `AUTH_ENABLED` | `true` | Enable/disable login |
-| `LOCALHOST_BYPASS` | `false` | Development-only auth bypass for loopback requests. Keep false for shared/network deployments. |
-| `SECURE_COOKIES` | `false` | Set true when serving Odysseus through HTTPS at a trusted proxy or private access gateway. |
-| `DATABASE_URL` | `sqlite:///./data/app.db` | Database connection string |
-| `CHROMADB_HOST` | `localhost` | ChromaDB host for vector memory. Docker overrides this to `chromadb`. |
-| `CHROMADB_PORT` | `8100` | ChromaDB port for manual host runs. Docker overrides this to `8000`. |
-| `EMBEDDING_URL` | -- | OpenAI-compatible embeddings endpoint |
+## ⚙ 설치 & 실행 (Windows)
 
-### Built-in MCP servers (optional setup)
-
-Odysseus auto-registers a few built-in MCP servers at startup. The npx-based ones (currently the browser server, `@playwright/mcp`) only start when their npm package is already in the local npx cache. If a package isn't cached, that server is skipped with a startup log message explaining what to do, so a fresh install does not block on a multi-minute npm download or hang if Playwright system deps are missing.
-
-To enable the browser MCP (page navigation, screenshots, vision), run once:
-
-```bash
-npx -y @playwright/mcp@latest --version
+### 0. 사전 준비 (없는 것만, PowerShell)
+```powershell
+winget install Python.Python.3.12
+winget install Git.Git
+winget install Gyan.FFmpeg
 ```
+설치 후 **새 터미널**에서 확인: `python --version` / `git --version` / `ffmpeg -version`
 
-That installs `@playwright/mcp` plus Playwright (~300MB total). Restart Odysseus and the server will register at startup.
+### 1. 더블클릭 2번
+1. **`setup.bat`** — venv·의존성 설치 + **agy·Node·codex 자동 설치** + **로컬 TTS 모델 다운로드(~380MB, HuggingFace)** + mp4maker 클론 + 환경 점검 (`.env` 자동 생성)
+2. **`run.bat`** — 웹 서버 실행, 브라우저가 `http://127.0.0.1:7000/vodstudio` 자동 오픈
 
-## Architecture
-```
-app.py                   # FastAPI entry point
-core/      auth, database, middleware, constants
-src/       llm_core, agent_loop, agent_tools, chat_processor, search/
-routes/    chat, session, document, memory, model … endpoints
-services/  docs, memory, search, hwfit (Cookbook) …
-static/    index.html + app.js + style.css + js/ (modular front-end)
-docs/      landing page (index.html) + preview clips
-```
+> 대본을 직접 붙여넣어 쓰면 로그인 없이도 ②~④ 진행 가능합니다.
 
-## Data
-All user data lives in `data/` (gitignored): `app.db` (sessions, messages, documents),
-`memory.json`, `presets.json`, `uploads/`, `personal_docs/`, `chroma/`, `settings.json`.
+### 2. 대본 생성 로그인 (최초 1회)
+① 대본 탭에서 공급자 토글(**OpenAI** / **Gemini**) 선택 → **🖥️ 로그인(터미널)** 버튼 →
+뜬 터미널에서 브라우저로 계정 로그인 → 배지가 초록(이메일 표시)으로 바뀌면 끝.
+- **OpenAI**: `codex login` (ChatGPT 계정)
+- **Gemini**: `agy` (Google 계정 · 개인 Gmail 권장)
 
-## Star History
+API 키 입력 없음 — 본인 계정 할당량으로 사용합니다.
 
-<a href="https://www.star-history.com/?repos=pewdiepie-archdaemon%2Fodysseus&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=pewdiepie-archdaemon/odysseus&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=pewdiepie-archdaemon/odysseus&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=pewdiepie-archdaemon/odysseus&type=date&legend=top-left" />
- </picture>
-</a>
+---
 
-## License
-MIT -- see [LICENSE](LICENSE) and [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md).
+## 🗂 워크플로우
+
+1. **① 대본** — 소스 파일 첨부 → 📚 자료 학습(RAG) → (선택)🔬 딥리서치 → ✦ 대본 생성 → ✅ 검수
+2. **② 이미지** — 🎨 디자인 프리셋 고르고 **렌더 코드 생성** → NotebookLM에 [소스 추가]+[코드 붙여넣기] → 슬라이드덱 PDF 다운로드 → 순서대로 임포트
+3. **③ 음성/자막** — 번들 저장 → 🔊 전체 음성/자막 생성(로컬 TTS) → 씬별 발음/자막/타이밍 다듬기 (발음 이상하면 📖 발음 사전에 추가)
+4. **④ 영상** — 🔍 dry-run으로 검증 → 🎬 풀 렌더(기본: 자막 없는 클린본 + `.srt`) → 📺 유튜브 메타 생성
+
+> **유튜브**: 자막 없는 `chNN_final_nosub.mp4`를 업로드하고, 같은 폴더의 `.srt`를 유튜브 자막으로 따로 올리세요.
+
+---
+
+## 📁 산출물 위치
 
 ```
-                                  |
-                                 |||
-                                |||||
-                  |    |    |   |||||||
-                 )_)  )_)  )_)   ~|~
-                )___))___))___)\  |
-               )____)____)_____)\\|
-             _____|____|____|_____\\\__
-             \                       /
-       ~^~^~~^~^~~^~^~~^~^~~^~^~~^~^~~^~^~~^~^~
-               ~^~  all aboard!  ~^~
-       ~^~^~~^~^~~^~^~~^~^~~^~^~~^~^~~^~^~~^~^~
+<출력폴더 또는 data/vodstudio/<job>/bundle>/_assets/chNN_bundle/
+  script/      chNN_script.json
+  images/      chNN_XX_*.png
+  audio/       chNN_XX_narration.wav      (로컬 TTS)
+  subtitles/   chNN_XX_narration.srt + chNN.srt
+  draft/       chNN_final_nosub.mp4 (또는 chNN_final.mp4) + chNN.srt
 ```
+- 시리즈 메모리: `data/vodstudio/series_memory.json`
+- 디자인 프리셋: `data/vodstudio/design_presets.json`
+- 발음 사전: `config/pronunciation_map.yaml`
+
+---
+
+## 📚 문서 ([`knowledge/`](knowledge/))
+- `vodstudio-usage.md` — 전체 사용법
+- `notebooklm-render-design.md` — 렌더 코드 & 디자인 시스템(프리셋·일관성)
+- `vodstudio-rag-research.md` — 로컬 RAG·딥리서치 원리
+- `notebooklm-slide-workflow.md` · `gemini-cli-setup.md` · `google-oauth-setup.md`
+
+---
+
+## 🧱 스택
+FastAPI + Vanilla JS · 로컬 임베딩(FastEmbed/ONNX) · 로컬 TTS(VoiceWright/Supertonic-3/ONNX) · mp4maker(ffmpeg) ·
+LLM은 `codex`/`agy` CLI 위임. **외부 서비스(ChromaDB·SearXNG·Docker) 미사용 — 전부 로컬.**
+
+> 베이스: [odysseus](https://github.com/pewdiepie-archdaemon/odysseus) 포크. 영상공방 전용 모듈은
+> `services/vodstudio/*`, `services/{agy,codex}/*`, `services/llm_backend.py`, `voicewright/*`,
+> `routes/vodstudio_routes.py`, `static/vodstudio/*`.

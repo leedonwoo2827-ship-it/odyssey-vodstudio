@@ -50,3 +50,14 @@ PyMuPDF
 # ./mp4maker/ checkout and is invoked as `python -m mp4maker`. ffmpeg/ffprobe
 # must be on PATH. See services/vodstudio/mp4_render.py.
 pysrt
+# --- 로컬 CPU TTS (VoiceWright / Supertonic-3, ONNX) ---
+# voicewright/ 패키지가 ONNX 모델로 음성을 합성한다(클라우드 없음). engine.py 참고.
+onnxruntime>=1.17
+soundfile>=0.12.1
+PyYAML>=6.0
+# --- LLM 공급자: Antigravity CLI(agy) Google 토큰을 Windows 자격증명 관리자에서 읽기 위함 ---
+# (Windows 전용. 다른 OS에서는 설치 생략 가능 — agy 사용 시에만 필요.)
+pywin32; sys_platform == "win32"
+# agy 는 응답을 stdout 파이프가 아니라 콘솔에 직접 쓴다. PTY(가상 콘솔)로 캡처하려면 필요.
+# 없으면 "agy 호출 실패(exit=0)" 로 빈 응답이 잡힌다. (services/agy/pty_terminal.py)
+pywinpty; sys_platform == "win32"

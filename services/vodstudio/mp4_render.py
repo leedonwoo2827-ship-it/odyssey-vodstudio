@@ -116,11 +116,17 @@ async def render(
     bundle_dir: str,
     *,
     resolution: str = "1920x1080",
+    no_subtitles: bool = False,
+    dry_run: bool = False,
     extra_args: Optional[List[str]] = None,
     on_line: Optional[Callable[[str], None]] = None,
     timeout: float = 1800.0,
 ) -> str:
-    """`python -m mp4maker <bundle> --resolution ...` 실행. 최종 MP4 경로 반환."""
+    """`python -m mp4maker <bundle> --resolution ...` 실행. 최종 MP4 경로 반환.
+
+    no_subtitles=True → 자막을 굽지 않은 클린본(chNN_final_nosub.mp4) + .srt 사이드카.
+    dry_run=True → 검증만(ffmpeg 미실행). 최종 MP4 없음 → "" 반환.
+    """
     if not available():
         raise RenderError(
             f"mp4maker 체크아웃을 찾을 수 없습니다: {MP4MAKER_DIR} "
@@ -131,8 +137,13 @@ async def render(
         _python(), "-m", "mp4maker", str(bdir),
         "--resolution", resolution,
     ]
+    if no_subtitles:
+        args.append("--no-subtitles")
+    if dry_run:
+        args.append("--dry-run")
     if extra_args:
         args += extra_args
+    final_token = "_final_nosub.mp4" if no_subtitles else "_final.mp4"
     logger.info("mp4maker render: %s", " ".join(args[2:]))
     proc = await asyncio.create_subprocess_exec(
         *args, cwd=str(MP4MAKER_DIR),
@@ -148,8 +159,8 @@ async def render(
             line = raw.decode("utf-8", "replace").rstrip()
             if on_line:
                 on_line(line)
-            # [done]  <path>  — capture the first *_final.mp4 we see.
-            if line.startswith("[done]") and "_final.mp4" in line:
+            # [done]  <path>  — capture the matching *_final(.|_nosub.)mp4 we see.
+            if line.startswith("[done]") and final_token in line:
                 final_path = line.split("]", 1)[1].strip()
     except asyncio.TimeoutError:
         proc.kill()
@@ -158,11 +169,74 @@ async def render(
     if proc.returncode != 0:
         raise RenderError(f"mp4maker 종료코드 {proc.returncode}")
 
+    if dry_run:
+        return ""  # 검증만 — 최종 MP4 없음
+
     # Prefer the parsed [done] path; fall back to draft/chNN_final.mp4.
     if final_path and Path(final_path).exists():
         return final_path
     doc = _read_script(bdir)
-    guess = bdir / "draft" / f"{_chapter_id(doc)}_final.mp4"
+    guess = bdir / "draft" / f"{_chapter_id(doc)}{final_token}"
     if guess.exists():
         return str(guess)
     raise RenderError("렌더는 끝났지만 최종 MP4를 찾지 못했습니다.")
+
+
+async def render_shorts(
+    bundle_dir: str,
+    *,
+    original_url: str = "",
+    duration: float = 30.0,
+    bottom_mode: str = "subtitle",
+    on_line: Optional[Callable[[str], None]] = None,
+    timeout: float = 1800.0,
+) -> str:
+    """`python -m mp4maker <bundle> --shorts ...` 실행. 세로 9:16 쇼츠 MP4 경로 반환.
+
+    오프닝 나레이션을 오디오 베드로, 핵심 장면 이미지를 3분할 변동 레이아웃으로 합성한다.
+    """
+    if not available():
+        raise RenderError(
+            f"mp4maker 체크아웃을 찾을 수 없습니다: {MP4MAKER_DIR}"
+        )
+    bdir = Path(bundle_dir).resolve()
+    args = [
+        _python(), "-m", "mp4maker", str(bdir),
+        "--shorts",
+        "--duration", f"{duration:g}",
+        "--bottom", bottom_mode,
+    ]
+    if (original_url or "").strip():
+        args += ["--original-url", original_url.strip()]
+    final_token = "_shorts.mp4"
+    logger.info("mp4maker shorts: %s", " ".join(args[2:]))
+    proc = await asyncio.create_subprocess_exec(
+        *args, cwd=str(MP4MAKER_DIR),
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+    )
+    final_path: Optional[str] = None
+    assert proc.stdout is not None
+    try:
+        while True:
+            raw = await asyncio.wait_for(proc.stdout.readline(), timeout=timeout)
+            if not raw:
+                break
+            line = raw.decode("utf-8", "replace").rstrip()
+            if on_line:
+                on_line(line)
+            if line.startswith("[done]") and final_token in line:
+                final_path = line.split("]", 1)[1].strip()
+    except asyncio.TimeoutError:
+        proc.kill()
+        raise RenderError(f"mp4maker 쇼츠 렌더 타임아웃 ({timeout:.0f}s)")
+    await proc.wait()
+    if proc.returncode != 0:
+        raise RenderError(f"mp4maker 종료코드 {proc.returncode}")
+
+    if final_path and Path(final_path).exists():
+        return final_path
+    doc = _read_script(bdir)
+    guess = bdir / "draft" / f"{_chapter_id(doc)}{final_token}"
+    if guess.exists():
+        return str(guess)
+    raise RenderError("쇼츠 렌더는 끝났지만 MP4를 찾지 못했습니다.")

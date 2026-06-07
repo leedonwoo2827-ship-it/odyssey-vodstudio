@@ -92,3 +92,9 @@ docs/windows-port/
 compound.config.json
 *.error.log
 _scratch/
+
+# --- 영상공방 추가 ---
+# 로컬 TTS ONNX 모델(245MB 등) — GitHub 100MB 한계 초과 → 별도 배포. (voice_styles/config는 포함)
+assets/onnx/
+# 설치 로그
+setup_log.txt
