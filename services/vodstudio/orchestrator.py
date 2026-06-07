@@ -113,7 +113,7 @@ async def run_pipeline(job: Job) -> None:
         aid = nlm.artifact_id(art)
         if aid:
             seen_ids.add(aid)
-        pdf_path = str(work / "pdf" / f"deck_{start:02d}_{end:02d}.pdf")
+        pdf_path = str(work / "pdf" / f"{ci + 1}-{start:02d}_{end:02d}.pdf")
         await nlm.download_slide_deck(notebook_id, pdf_path, fmt="pdf", artifact_id=aid, profile=profile)
         pdf_paths.append(pdf_path)
         job.log(f"chunk {start}-{end}: downloaded {Path(pdf_path).name}")
