@@ -507,8 +507,21 @@ def setup_vodstudio_routes() -> APIRouter:
                 "store_path": str(series_memory.STORE_PATH.resolve())}
 
     # ---- 🎨 NotebookLM 디자인 시스템 프리셋 (개인이 추가/저장 — 슬라이드 일관성) ----
+    # 기본 = 대학생·일반인 교육용(초록). NotebookLM 통과 검증된 플랫벡터 구조.
+    # (파스텔/일러스트 스타일 지시는 NotebookLM 안전필터에 자주 거부되므로 플랫벡터로 통일.)
     _DESIGN_DEFAULT = {
-        "name": "기본 · 플랫 벡터(파랑 강조)",
+        "name": "기본 · 대학생·일반인 교육(초록 강조)",
+        "text": ("Style: Flat Vector, Clean Illustration (Pure white background #FFFFFF)\n"
+                 "Typography: Clean Sans-serif fonts (Title: Bold, Body: Regular)\n"
+                 "Layout: Keep it spacious; Max 5 bullet points per slide\n"
+                 "Tone: Clear, friendly, and easy to follow\n"
+                 "Crucial:\n"
+                 "Use \"Noun-ending\" or \"Short-form\" for all texts.\n"
+                 "Maintain strict visual consistency with previous parts.\n"
+                 "Use point colors (e.g., Teal Green) for emphasis."),
+    }
+    _DESIGN_ALT = {
+        "name": "전문 · 플랫(파랑 강조)",
         "text": ("Style: Flat Vector, Clean Illustration (Pure white background #FFFFFF)\n"
                  "Typography: Clean Sans-serif fonts (Title: Bold, Body: Regular)\n"
                  "Layout: Keep it spacious; Max 5 bullet points per slide\n"
@@ -517,17 +530,6 @@ def setup_vodstudio_routes() -> APIRouter:
                  "Use \"Noun-ending\" or \"Short-form\" for all texts.\n"
                  "Maintain strict visual consistency with previous parts.\n"
                  "Use point colors (e.g., Deep Blue) for emphasis."),
-    }
-    _DESIGN_ALT = {
-        "name": "친근 · 파스텔 일러스트(주황 강조)",
-        "text": ("Style: Soft Pastel Illustration, rounded shapes (Light cream background #FFF8F0)\n"
-                 "Typography: Friendly Sans-serif (Title: Bold rounded, Body: Regular)\n"
-                 "Layout: Generous whitespace; Max 4 bullet points per slide; one supporting icon per slide\n"
-                 "Tone: Warm, approachable, encouraging\n"
-                 "Crucial:\n"
-                 "Use short conversational phrases.\n"
-                 "Maintain strict visual consistency with previous parts.\n"
-                 "Use point colors (e.g., Warm Orange) for emphasis."),
     }
 
     def _design_path() -> Path:
