@@ -426,6 +426,7 @@ async function saveBundle() {
     if (!res.ok) throw new Error(d.detail || "저장 실패");
     showSave(d);
     loadScenes();
+    refreshBundles();
   } catch (e) {
     $("saveStatus").textContent = "실패: " + e.message;
   } finally {
@@ -441,6 +442,18 @@ function showSave(d) {
   html += probs.length ? `<div class="err">검증 문제 ${probs.length}건</div>` : `<div style="color:var(--accent2)">✓ mediaforge가 바로 읽는 형식</div>`;
   $("saveResult").innerHTML = html;
   $("jsonPreview").textContent = d.script_json || "";
+}
+
+// ② 이미지 하단 "번들 저장(이미지 포함)" — ① 하단의 chapter/제목/출력폴더 값을 재사용
+async function saveFromImages() {
+  const b = $("saveBtn2"); if (b) b.disabled = true;
+  $("saveStatus2").textContent = "저장 중…";
+  await saveBundle();
+  const failed = (($("saveStatus").textContent) || "").includes("실패");
+  $("saveStatus2").textContent = failed
+    ? "저장 실패 — ① 대본 하단에서 확인"
+    : "✓ 저장됨 (이미지 포함) — ① 하단 📂 불러오기 가능";
+  if (b) b.disabled = false;
 }
 
 // ---- 기존 번들 불러오기 (재시작 후 작업 이어가기) ----
@@ -946,6 +959,7 @@ on("voiceStyle", "change", echoVoice);
 on("bundlesRefresh", "click", refreshBundles);
 on("loadBundleBtn", "click", loadBundle);
 on("saveBtn", "click", saveBundle);
+on("saveBtn2", "click", saveFromImages);
 on("synthAllBtn", "click", synthAll);
 on("pronDictBtn", "click", openPronDict);
 on("pronSaveBtn", "click", savePronDict);
