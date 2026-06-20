@@ -240,3 +240,202 @@ async def render_shorts(
     if guess.exists():
         return str(guess)
     raise RenderError("쇼츠 렌더는 끝났지만 MP4를 찾지 못했습니다.")
+
+
+async def render_intro(
+    bundle_dir: str,
+    *,
+    duration: float = 15.0,
+    speed: float = 1.15,
+    resolution: str = "1920x1080",
+    backdrop: str = "plain",
+    order: str = "reverse",
+    sfx: str = "both",
+    audio_path: str = "",
+    script_text: str = "",
+    on_line: Optional[Callable[[str], None]] = None,
+    timeout: float = 1800.0,
+) -> str:
+    """`python -m mp4maker <bundle> --intro ...` 실행. 가로 16:9 인트로 MP4 경로 반환.
+
+    본편 앞에 붙는 '목차/요약' 티저. 전체화면 켄번스 빠른 컷 + 빠른 나레이션(atempo).
+    """
+    if not available():
+        raise RenderError(f"mp4maker 체크아웃을 찾을 수 없습니다: {MP4MAKER_DIR}")
+    bdir = Path(bundle_dir).resolve()
+    args = [
+        _python(), "-m", "mp4maker", str(bdir),
+        "--intro",
+        "--duration", f"{duration:g}",
+        "--speed", f"{speed:g}",
+        "--resolution", resolution,
+        "--backdrop", backdrop,
+        "--intro-order", order,
+        "--sfx", sfx,
+    ]
+    if (audio_path or "").strip():
+        args += ["--audio", audio_path.strip()]
+    # 캡션용 인트로 대본은 파일로 전달(긴 텍스트/줄바꿈 안전)
+    if (script_text or "").strip():
+        try:
+            sp = bdir / "draft" / "_intro_script.txt"
+            sp.parent.mkdir(parents=True, exist_ok=True)
+            sp.write_text(script_text.strip(), encoding="utf-8")
+            args += ["--intro-script", str(sp)]
+        except Exception:
+            pass
+    final_token = "_intro.mp4"
+    logger.info("mp4maker intro: %s", " ".join(args[2:]))
+    proc = await asyncio.create_subprocess_exec(
+        *args, cwd=str(MP4MAKER_DIR),
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+    )
+    final_path: Optional[str] = None
+    assert proc.stdout is not None
+    try:
+        while True:
+            raw = await asyncio.wait_for(proc.stdout.readline(), timeout=timeout)
+            if not raw:
+                break
+            line = raw.decode("utf-8", "replace").rstrip()
+            if on_line:
+                on_line(line)
+            if line.startswith("[done]") and final_token in line:
+                final_path = line.split("]", 1)[1].strip()
+    except asyncio.TimeoutError:
+        proc.kill()
+        raise RenderError(f"mp4maker 인트로 렌더 타임아웃 ({timeout:.0f}s)")
+    await proc.wait()
+    if proc.returncode != 0:
+        raise RenderError(f"mp4maker 종료코드 {proc.returncode}")
+
+    if final_path and Path(final_path).exists():
+        return final_path
+    doc = _read_script(bdir)
+    guess = bdir / "draft" / f"{_chapter_id(doc)}{final_token}"
+    if guess.exists():
+        return str(guess)
+    raise RenderError("인트로 렌더는 끝났지만 MP4를 찾지 못했습니다.")
+
+
+# ---- 🔗 인트로 + 본편 합치기 (원본 보존 · chNN_with_intro.mp4) -------------------
+async def _stream_ffmpeg(args: list, on_line: Optional[Callable[[str], None]], timeout: float) -> int:
+    proc = await asyncio.create_subprocess_exec(
+        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+    assert proc.stdout is not None
+    try:
+        while True:
+            raw = await asyncio.wait_for(proc.stdout.readline(), timeout=timeout)
+            if not raw:
+                break
+            line = raw.decode("utf-8", "replace").rstrip()
+            if on_line and line:
+                on_line(line)
+    except asyncio.TimeoutError:
+        proc.kill()
+        raise RenderError("합치기 타임아웃")
+    await proc.wait()
+    return proc.returncode or 0
+
+
+async def _ffprobe_streams(path: Path) -> dict:
+    args = ["ffprobe", "-v", "error", "-print_format", "json", "-show_streams", str(path)]
+    proc = await asyncio.create_subprocess_exec(
+        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    out, _ = await proc.communicate()
+    try:
+        data = json.loads(out.decode("utf-8", "replace") or "{}")
+    except Exception:
+        data = {}
+    streams = data.get("streams", [])
+    v = next((s for s in streams if s.get("codec_type") == "video"), {})
+    a = next((s for s in streams if s.get("codec_type") == "audio"), {})
+    return {"v": v, "a": a}
+
+
+async def merge_intro(bundle_dir: str, *, on_line: Optional[Callable[[str], None]] = None,
+                      timeout: float = 3600.0) -> str:
+    """인트로(chNN_intro.mp4)를 본편 최종영상 앞에 붙여 chNN_with_intro.mp4 생성.
+
+    원본(chNN_final*.mp4)은 절대 건드리지 않는다. 인트로만 본편 규격에 맞춰 재인코딩 후
+    concat 데먹서(-c copy)로 즉시 결합(빠름). 실패 시 재인코딩 폴백.
+    """
+    bdir = Path(bundle_dir).resolve()
+    doc = _read_script(bdir)
+    chap = _chapter_id(doc)
+    draft = bdir / "draft"
+    intro = draft / f"{chap}_intro.mp4"
+    if not intro.exists():
+        raise RenderError("인트로가 없습니다 — 먼저 '🎬 인트로 생성'을 하세요.")
+    main = None
+    for name in (f"{chap}_final_nosub.mp4", f"{chap}_final.mp4"):
+        if (draft / name).exists():
+            main = draft / name
+            break
+    if main is None:
+        raise RenderError("본편 최종영상(chNN_final*.mp4)이 없습니다 — 먼저 ④ 풀 렌더를 하세요.")
+
+    def _line(l: str) -> None:
+        if on_line:
+            on_line(l)
+
+    _line(f"[merge] 본편={main.name} · 인트로={intro.name} (원본 보존)")
+    info = await _ffprobe_streams(main)
+    v, a = info["v"], info["a"]
+    W = int(v.get("width") or 1920)
+    H = int(v.get("height") or 1080)
+    rfr = str(v.get("r_frame_rate") or "30/1")
+    try:
+        num, den = rfr.split("/")
+        fps = int(round(float(num) / float(den))) if float(den) else 30
+    except Exception:
+        fps = 30
+    try:
+        ts = int(str(v.get("time_base") or "1/15360").split("/")[1])
+    except Exception:
+        ts = 15360
+    sar = str(v.get("sample_aspect_ratio") or "1:1")
+    if sar in ("N/A", "0:1", ""):
+        sar = "1:1"
+    ar = int(a.get("sample_rate") or 48000)
+    ac = int(a.get("channels") or 2)
+
+    matched = draft / "_intro_matched.mp4"
+    vf = (f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
+          f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:black,setsar={sar.replace(':', '/')},"
+          f"fps={fps},format=yuv420p")
+    _line(f"[merge] 인트로 규격 맞춤 {W}x{H}@{fps} (ts={ts}, sar={sar})…")
+    rc = await _stream_ffmpeg(
+        ["ffmpeg", "-y", "-i", str(intro), "-vf", vf,
+         "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-video_track_timescale", str(ts),
+         "-c:a", "aac", "-ar", str(ar), "-ac", str(ac), "-b:a", "192k",
+         "-movflags", "+faststart", str(matched)], _line, timeout)
+    if rc != 0 or not matched.exists():
+        raise RenderError("인트로 규격 맞춤 실패")
+
+    out = draft / f"{chap}_with_intro.mp4"
+    listf = draft / "_merge_list.txt"
+    listf.write_text(f"file '{matched.resolve().as_posix()}'\nfile '{main.resolve().as_posix()}'\n",
+                     encoding="utf-8")
+    _line("[merge] 합치는 중 (copy)…")
+    rc = await _stream_ffmpeg(
+        ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listf),
+         "-c", "copy", "-movflags", "+faststart", str(out)], _line, timeout)
+    if rc != 0 or not out.exists():
+        _line("[merge] copy 실패 → 재인코딩 폴백(시간 걸릴 수 있음)…")
+        rc = await _stream_ffmpeg(
+            ["ffmpeg", "-y", "-i", str(matched), "-i", str(main),
+             "-filter_complex", "[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[v][a]",
+             "-map", "[v]", "-map", "[a]",
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+             "-c:a", "aac", "-ar", str(ar), "-ac", str(ac), "-b:a", "192k",
+             "-movflags", "+faststart", str(out)], _line, timeout)
+    for tmp in (listf, matched):
+        try:
+            tmp.unlink()
+        except Exception:
+            pass
+    if rc != 0 or not out.exists():
+        raise RenderError("합치기 실패 — 출력 파일이 생성되지 않았습니다.")
+    _line(f"[done] {out}")
+    return str(out)

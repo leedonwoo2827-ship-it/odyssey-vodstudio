@@ -47,11 +47,28 @@ async function loadLlmStatus() {
     else if (!a.authenticated) { badge.textContent = `${s.label} 로그인 필요`; badge.className = "badge no"; }
     else { badge.textContent = `${s.label} · ${a.email || "로그인됨"}`; badge.className = "badge ok"; }
   } catch (e) { badge.textContent = "확인 불가"; badge.className = "badge"; }
+  loadModels();   // 공급자 상태 갱신 시 모델 목록도 함께 갱신(공급자 전환 후 자동 반영)
+}
+// 활성 공급자의 모델 목록 + 현재 선택 모델 로드
+async function loadModels() {
+  const sel = $("llmModel"); if (!sel) return;
+  try {
+    const d = await api("/llm/models");
+    const models = d.models || [], cur = d.current || "";
+    let html = `<option value="">(기본 모델)</option>` +
+      models.map(m => `<option value="${esc(m)}"${m === cur ? " selected" : ""}>${esc(m)}</option>`).join("");
+    if (cur && !models.includes(cur)) html += `<option value="${esc(cur)}" selected>${esc(cur)} (현재)</option>`;
+    sel.innerHTML = html;
+  } catch (e) { sel.innerHTML = `<option value="">(모델 목록 불러오기 실패)</option>`; }
+}
+async function setModel(name) {
+  try { await api("/llm/model", { method: "POST", body: JSON.stringify({ model: name }) }); }
+  catch (e) { alert("모델 설정 실패: " + e.message); }
 }
 async function setProvider(prov) {
   try { await api("/llm/provider", { method: "POST", body: JSON.stringify({ provider: prov }) }); }
   catch (e) { alert("공급자 전환 실패: " + e.message); }
-  loadLlmStatus();
+  loadLlmStatus();   // 내부에서 loadModels()도 호출 → 새 공급자 모델로 교체
 }
 async function llmLogin() {
   try {
@@ -68,6 +85,66 @@ function refreshChips() {
   const box = $("srcDrop"), txt = $("srcBoxText");
   if (files.length) { box.classList.add("has-file"); txt.textContent = `📎 ${files.length}개 파일 첨부됨 (다시 누르면 교체)`; }
   else { box.classList.remove("has-file"); txt.textContent = "📎 소스 파일 첨부 (여러 개 가능 · PDF·Word·PPT·Excel) — 이 내용으로 대본 생성"; }
+  analyzeSource();   // 첨부되면 글자수 분석 → 길이 옵션 표시
+}
+
+// ---- 📏 길이 옵션 (원문 글자수 기반 5/10/15/30분 → 슬라이드 수) ----
+let SELECTED_OPT = null;
+function setSlideCount(n) {
+  const g = $("gTotal");
+  if (g) {
+    if (![...g.options].some(o => (o.value || o.textContent) == String(n)))
+      g.insertAdjacentHTML("beforeend", `<option>${n}</option>`);
+    g.value = String(n);
+  }
+  const rc = $("rcTotal"); if (rc) rc.value = n;
+}
+async function analyzeSource() {
+  const files = [...($("srcFile").files || [])];
+  const wrap = $("srcOptions"); if (!wrap) return;
+  if (!files.length) { wrap.classList.add("hidden"); wrap.innerHTML = ""; SELECTED_OPT = null; return; }
+  wrap.classList.remove("hidden"); wrap.innerHTML = `<div class="hint">📄 자료 글자수 읽는 중…</div>`;
+  try {
+    const fd = new FormData();
+    files.forEach(f => fd.append("files", f));
+    if (JOB) fd.append("job_id", JOB);
+    const res = await fetch(API + "/analyze-source", { method: "POST", credentials: "same-origin", body: fd });
+    let d = null; try { d = await res.json(); } catch (e) {}
+    if (!res.ok) throw new Error((d && d.detail) || `HTTP ${res.status}`);
+    JOB = d.job_id || JOB;
+    renderSourceOptions(d);
+  } catch (e) { wrap.innerHTML = `<div class="hint">자료 분석 실패: ${esc(e.message)} (스캔 PDF면 텍스트 추출이 안 될 수 있어요)</div>`; }
+}
+function renderSourceOptions(d) {
+  const wrap = $("srcOptions"); if (!wrap) return;
+  const fmt = n => Math.round(n).toLocaleString();
+  const src = d.source_chars || 0;
+  const MIN_TARGETS = [5, 10, 15, 30], CPS_SAFE = 7.0, MAX_IMAGES = 40;
+  const opts = MIN_TARGETS.map((m, i) => {
+    const narr = Math.round(m * 60 * CPS_SAFE);
+    const images = Math.max(1, Math.min(m * 2, MAX_IMAGES));
+    return { idx: i + 1, minutes: m, narr, images, pct: src ? Math.round(narr / src * 100) : 0 };
+  });
+  const cols = "grid-template-columns:1.0fr .8fr 1.0fr .8fr .9fr;gap:.5rem";
+  const header = `<div style="display:grid;${cols};align-items:center;padding:.25rem .8rem;color:#6b7280;font-size:.78rem">
+      <span>옵션 · 원문</span><span>요약 비율</span><span>내레이션 목표</span><span>길이</span><span>이미지(슬라이드)</span></div>`;
+  const rows = opts.map(o => {
+    const over = o.pct > 100, sel = SELECTED_OPT && SELECTED_OPT.idx === o.idx;
+    const bg = sel ? "background:rgba(79,70,229,.12);border:2px solid var(--accent)" : "background:var(--panel2);border:1px solid var(--border)";
+    const pctCell = over ? `<span style="color:#dc2626">${o.pct}% · 많음</span>` : `<span><b>${o.pct}%</b></span>`;
+    return `<button type="button" class="srcopt" data-idx="${o.idx}" data-min="${o.minutes}" data-images="${o.images}"
+      style="display:grid;${cols};align-items:center;width:100%;text-align:left;margin:.22rem 0;padding:.5rem .8rem;border-radius:8px;${bg};color:var(--text);font-size:.92rem;cursor:pointer">
+      <span><b>옵션 ${o.idx}</b> · ${fmt(src)}자</span>${pctCell}
+      <span><b>${fmt(o.narr)}</b>자</span><span><b>${o.minutes}분 이상</b></span>
+      <span>🎬 <b>${o.images}</b>개</span></button>`;
+  }).join("");
+  wrap.innerHTML = `<div class="hint" style="margin-bottom:.3rem">📄 원문 ${fmt(src)}자 읽음. <b>목표 길이(분)</b>를 고르면 그에 맞는 <b>슬라이드(이미지) 수</b>로 설정됩니다. (요약 비율은 이 자료 기준 %)</div>` + header + rows;
+  wrap.querySelectorAll(".srcopt").forEach(b => b.addEventListener("click", () => {
+    SELECTED_OPT = { idx: +b.dataset.idx, minutes: +b.dataset.min, images: +b.dataset.images };
+    setSlideCount(SELECTED_OPT.images);
+    renderSourceOptions(d);
+    if ($("genStatus")) $("genStatus").textContent = `🎬 옵션 ${SELECTED_OPT.idx} 선택 — 슬라이드 ${SELECTED_OPT.images}장(약 ${SELECTED_OPT.minutes}분)으로 설정됨. 아래 ✦ 대본 생성을 누르세요.`;
+  }));
 }
 let ragIndexed = false;
 
@@ -187,8 +264,84 @@ async function reviewScript() {
     const d = await api(`/jobs/${JOB}/review-script`, { method: "POST", body: JSON.stringify({ script_text: text }) });
     $("reviewOut").textContent = d.report || "";
     $("reviewBox").classList.remove("hidden"); $("reviewBox").open = true;
-    $("copyScriptStatus").textContent = "✓ 검수 완료 — 아래 결과 확인";
+    const rb = $("reviseBtn"); if (rb) rb.classList.remove("hidden");   // 검수 후 🟡 수정 버튼 노출
+    $("copyScriptStatus").textContent = "✓ 검수 완료 — 아래 결과 확인 (🟡 검수 반영 수정으로 자동 교정 가능)";
   } catch (e) { $("copyScriptStatus").textContent = "검수 실패: " + e.message; }
+  finally { btn.disabled = false; }
+}
+
+// 🟡 검수 반영 수정 — 검수 결과(과장/모호 위주)를 대본에 자동 적용 (슬라이드 묶음 단위 처리)
+async function reviseScript() {
+  const text = $("manualScript").value.trim();
+  const report = ($("reviewOut").textContent || "").trim();
+  if (!text) { alert("수정할 대본이 없습니다."); return; }
+  if (!report) { alert("먼저 ✅ 대본 자동 검수를 실행하세요."); return; }
+  if (!JOB) { alert("먼저 📚 자료 학습(RAG)을 누르세요."); return; }
+  if (!confirm("검수 결과(🟡 과장/모호 위주)를 반영해 대본을 다듬습니다.\n현재 대본을 덮어씁니다. 진행할까요?")) return;
+  const btn = $("reviseBtn"); btn.disabled = true;
+  $("copyScriptStatus").textContent = "검수 반영해 수정 중… (슬라이드 묶음별 처리라 잠시 걸려요)";
+  try {
+    const d = await api(`/jobs/${JOB}/revise-script`, { method: "POST", body: JSON.stringify({ script_text: text, review_report: report }) });
+    if (d.script) $("manualScript").value = d.script;
+    $("copyScriptStatus").textContent = "✓ 수정 완료 — 다시 ✅ 검수로 확인하거나 📋 복사하세요.";
+  } catch (e) { $("copyScriptStatus").textContent = "수정 실패: " + e.message; }
+  finally { btn.disabled = false; }
+}
+
+// ✨ 자동 정리 하네스 — 검수→수정→재검수를 🔴/🟡이 사라질 때까지 반복(최대 MAX회)
+function reviewBlock(report, startEmoji, ends) {
+  const s = (report || "").indexOf(startEmoji);
+  if (s < 0) return "";
+  let e = report.length;
+  for (const em of ends.concat(["한 줄", "총평"])) {
+    const i = report.indexOf(em, s + startEmoji.length);
+    if (i >= 0 && i < e) e = i;
+  }
+  return report.slice(s, e);
+}
+function countIssues(report) {
+  // 지적 항목은 항상 "슬라이드 N"을 참조 — 블록 내 '슬라이드' 등장수 ≈ 지적 건수
+  const c = s => (s.match(/슬라이드/g) || []).length;
+  const red = c(reviewBlock(report, "🔴", ["🟡", "🟢"]));
+  const yel = c(reviewBlock(report, "🟡", ["🟢"]));
+  return { red, yel, any: red + yel > 0 };
+}
+// ✨ 자동 정리: 한 번 누르면 검수→수정을 몇 번 다듬는다. 끝까지 강제로 돌리지 않고,
+// 깨끗해지면 멈추고, 남았으면 "다시 누르면 계속"하게 둔다(없어질 때까지/간단한 것만 남을 때까지).
+// 과도한 연속 재작성은 오탈자를 부르므로 한 번에 도는 횟수는 짧게 잡는다.
+async function autoReview() {
+  if (!ragIndexed || !JOB) { alert("자동 정리는 RAG 근거가 필요합니다. 먼저 📚 자료 학습을 누르세요."); return; }
+  if (!$("manualScript").value.trim()) { alert("대본이 없습니다."); return; }
+  const ROUNDS = 2;   // 한 번 누를 때 다듬는 횟수(부족하면 사용자가 다시 누름)
+  const btn = $("autoReviewBtn"); btn.disabled = true;
+  $("reviewBox").classList.remove("hidden"); $("reviewBox").open = true;
+  let first = null, last = null;
+  const review = async () => {
+    const rv = await api(`/jobs/${JOB}/review-script`, { method: "POST", body: JSON.stringify({ script_text: $("manualScript").value }) });
+    const report = rv.report || ""; $("reviewOut").textContent = report; return report;
+  };
+  try {
+    for (let r = 1; r <= ROUNDS; r++) {
+      $("copyScriptStatus").textContent = "✨ 자동 정리 — 검수 중…";
+      const report = await review();
+      last = countIssues(report); if (r === 1) first = last;
+      if (!last.any) break;   // 깨끗 → 멈춤
+      $("copyScriptStatus").textContent = "✨ 자동 정리 — 수정 반영 중… (잠시 걸려요)";
+      const d = await api(`/jobs/${JOB}/revise-script`, { method: "POST", body: JSON.stringify({ script_text: $("manualScript").value, review_report: report }) });
+      if (d.script) $("manualScript").value = d.script;
+    }
+    if (last && last.any) {   // 마지막에 수정했으면 현재 상태를 한 번 더 확인
+      $("copyScriptStatus").textContent = "✨ 자동 정리 — 재검수 중…";
+      last = countIssues(await review());
+    }
+    if (last && !last.any) {
+      $("copyScriptStatus").textContent = first && (first.red + first.yel)
+        ? `✓ 정리됨 — 처음 🔴${first.red}·🟡${first.yel}건 있었는데 지금 없음. 📋 복사 → NotebookLM.`
+        : "✓ 검수 통과 — 🔴/🟡 없음. 바로 진행하세요.";
+    } else {
+      $("copyScriptStatus").textContent = `처음 🔴${first.red}·🟡${first.yel} → 지금 🔴${last.red}·🟡${last.yel}. 남았으면 ✨ 다시 눌러 계속 정리하세요 (없어지거나 간단한 것만 남을 때까지).`;
+    }
+  } catch (e) { $("copyScriptStatus").textContent = "자동 정리 실패: " + e.message; }
   finally { btn.disabled = false; }
 }
 
@@ -200,7 +353,13 @@ async function ytMeta() {
   const btn = $("ytMetaBtn"); btn.disabled = true;
   $("ytStatus").textContent = "유튜브 메타 생성 중…";
   try {
-    const d = await api(`/jobs/${JOB}/youtube-meta`, { method: "POST", body: JSON.stringify({ script_text: text, title_hint: $("bundleTitle") ? $("bundleTitle").value : "" }) });
+    const d = await api(`/jobs/${JOB}/youtube-meta`, { method: "POST", body: JSON.stringify({
+      script_text: text,
+      title_hint: $("bundleTitle") ? $("bundleTitle").value : "",
+      book_title: ($("ytBook") ? $("ytBook").value : "").trim(),
+      chapter_no: ($("ytChapNo") ? $("ytChapNo").value : "").trim(),
+      chapter_title: ($("ytChapTitle") ? $("ytChapTitle").value : "").trim(),
+    }) });
     $("ytOut").textContent = d.meta || ""; $("ytOut").classList.remove("hidden");
     $("ytCopyBtn").classList.remove("hidden"); $("ytClearBtn").classList.remove("hidden");
     $("ytStatus").textContent = "✓ 완료 — 복사해서 유튜브에 붙여넣으세요";
@@ -233,6 +392,7 @@ function buildRenderCode(total, chunk, design) {
     const first = i === 0, last = i === n - 1;
     const r = [];
     r.push("Match the source content 1:1.");
+    r.push(`Show a small page number on EVERY slide in the SAME fixed position — bottom-LEFT corner (opposite the NotebookLM logo), small gray text, identical size and placement on all slides (do not vary size or position). Number consecutively starting from ${s} for this part, so the full deck reads 1…${total} in order. This keeps slide order visible regardless of file name.`);
     if (designLine) r.push(`Keep a consistent visual style on every slide — ${designLine}`);
     if (!first) r.push(`Do NOT make a cover/title slide; start immediately with slide ${s} body content.`);
     r.push(last
@@ -283,6 +443,21 @@ function applyDesignPreset(i) {
   const p = DESIGN_PRESETS[i]; if (!p) return;
   if ($("designName")) $("designName").value = p.name || "";
   if ($("designSystem")) $("designSystem").value = p.text || "";
+}
+// 타겟 청중 → 디자인 프리셋 자동 선택: 대학생·일반인=1번(초록), 그 외=2번(전문·파랑)
+function applyDesignByAudience() {
+  if (!DESIGN_PRESETS.length) return;
+  const aud = ($("gAudience") && $("gAudience").value) || "";
+  let idx;
+  if (aud === "대학생·일반인") {
+    idx = DESIGN_PRESETS.findIndex(p => (p.name || "").includes("대학생"));
+    if (idx < 0) idx = 0;
+  } else {
+    idx = DESIGN_PRESETS.findIndex(p => /전문|파랑/.test(p.name || ""));
+    if (idx < 0) idx = DESIGN_PRESETS.length > 1 ? 1 : 0;
+  }
+  const sel = $("designPreset"); if (sel) sel.value = String(idx);
+  applyDesignPreset(idx);
 }
 async function loadDesignPresets() {
   try { const d = await api("/design-presets"); DESIGN_PRESETS = d.presets || []; }
@@ -456,18 +631,55 @@ async function saveFromImages() {
   if (b) b.disabled = false;
 }
 
+// ③ 음성/자막 하단 번들 저장 — 음성/자막은 이미 자동 저장되므로, 이 버튼은 ①대본+이미지 기준 재저장.
+// ③에서 발음/자막을 편집했다면 ① 대본 기준 덮어쓰기로 사라질 수 있어 확인을 받는다.
+async function saveFromAudio() {
+  if (SCENES && SCENES.length &&
+      !confirm("번들을 ① 대본 + 이미지 기준으로 다시 저장(덮어쓰기)합니다.\n" +
+               "• 생성된 음성(wav)·자막(srt) 파일 자체는 유지됩니다.\n" +
+               "• 다만 ③에서 편집한 발음/자막이 ① 대본과 다르면 덮어써질 수 있어요.\n\n계속할까요?")) return;
+  const b = $("saveBtn3"); if (b) b.disabled = true;
+  $("saveStatus3").textContent = "저장 중…";
+  await saveBundle();
+  const failed = (($("saveStatus").textContent) || "").includes("실패");
+  $("saveStatus3").textContent = failed ? "저장 실패 — ① 대본 하단에서 확인" : "✓ 번들 저장됨";
+  if (b) b.disabled = false;
+}
+
 // ---- 기존 번들 불러오기 (재시작 후 작업 이어가기) ----
+let BUNDLES = [];
 async function refreshBundles() {
-  const sel = $("bundleSelect");
+  const host = $("bundleList"); if (!host) return;
   const root = ($("outputDir") && $("outputDir").value.trim()) || "";
   $("loadStatus").textContent = "목록 불러오는 중…";
   try {
     const d = await api(`/bundles?root=${encodeURIComponent(root)}`);
-    const items = d.bundles || [];
-    sel.innerHTML = `<option value="">— 디스크의 번들 (${items.length}) —</option>` +
-      items.map(b => `<option value="${esc(b.bundle_dir)}">${esc(b.name)} · ${esc(b.title || "")} · 씬${b.scenes}${b.has_render ? " · 렌더됨" : ""}</option>`).join("");
-    $("loadStatus").textContent = items.length ? `${items.length}개 발견` : "번들 없음 (출력 폴더 경로 확인)";
+    BUNDLES = d.bundles || [];
+    if (!BUNDLES.length) {
+      host.innerHTML = `<div class="empty">번들 없음 — 출력 폴더 경로 확인 후 🔄 (또는 아래 경로 직접 입력)</div>`;
+    } else {
+      host.innerHTML = BUNDLES.map((b, i) => `<div class="brow" data-i="${i}">
+        <div class="bname"><b>${esc(b.name)}</b><span class="bmeta"> · ${esc(b.title || "")} · 씬${b.scenes}${b.has_render ? " · 렌더됨" : ""}</span></div>
+        <button class="bload secondary small" type="button">불러오기</button>
+        <button class="bdel" type="button" title="삭제">🗑</button>
+      </div>`).join("");
+      host.querySelectorAll(".brow").forEach(row => {
+        const b = BUNDLES[+row.dataset.i];
+        row.querySelector(".bload").addEventListener("click", () => loadBundleByDir(b.bundle_dir));
+        row.querySelector(".bdel").addEventListener("click", () => deleteBundle(b.bundle_dir, b.name));
+      });
+    }
+    $("loadStatus").textContent = BUNDLES.length ? `${BUNDLES.length}개 발견` : "";
   } catch (e) { $("loadStatus").textContent = "실패: " + e.message; }
+}
+async function deleteBundle(dir, name) {
+  if (!confirm(`'${name}' 번들 폴더를 영구 삭제할까요?\n${dir}\n(되돌릴 수 없습니다)`)) return;
+  $("loadStatus").textContent = "삭제 중…";
+  try {
+    await api("/delete-bundle", { method: "POST", body: JSON.stringify({ bundle_dir: dir }) });
+    $("loadStatus").textContent = `✓ 삭제됨 — ${name}`;
+    refreshBundles();
+  } catch (e) { $("loadStatus").textContent = "삭제 실패: " + e.message; }
 }
 function fillScriptFromScenes(scenes) {
   // 번들 대본(JSON)에서 ① 대본 텍스트 복원
@@ -508,10 +720,10 @@ function replaceSceneImage(idx, imgEl) {
   };
   inp.click();
 }
-async function loadBundle() {
-  const dir = $("bundleSelect").value;
-  if (!dir) { alert("불러올 번들을 목록에서 고르세요. (없으면 🔄)"); return; }
-  $("loadBundleBtn").disabled = true; $("loadStatus").textContent = "불러오는 중…";
+async function loadBundleByDir(dir) {
+  dir = (dir || "").trim();
+  if (!dir) { alert("불러올 번들을 목록에서 고르거나 경로를 입력하세요. (없으면 🔄)"); return; }
+  $("loadStatus").textContent = "불러오는 중…";
   try {
     const d = await api("/load-bundle", { method: "POST", body: JSON.stringify({ bundle_dir: dir }) });
     JOB = d.job_id; ragIndexed = false;
@@ -536,7 +748,6 @@ async function loadBundle() {
     if (st.steps && st.steps.audio) markDone("audio");
     $("loadStatus").textContent = `✓ 불러옴 — 씬 ${st.scene_count || 0} · 이미지 ${scenes.filter(s => s.has_image).length} · 영상 ${(d.final_mp4 || d.final_nosub_mp4) ? "있음" : "없음"}. 대본/이미지/영상 복원됨`;
   } catch (e) { $("loadStatus").textContent = "실패: " + e.message; }
-  finally { $("loadBundleBtn").disabled = false; }
 }
 
 // ---- 씬별 음성/자막 카드 ----
@@ -548,6 +759,24 @@ function voiceSelectHtml(selected) {
   const sel = (selected || "").toUpperCase();
   return VOICE_OPTS.map(([v, l]) =>
     `<option value="${v}"${v === sel ? " selected" : ""}>${l}</option>`).join("");
+}
+// 성우 단추(pill) — 숨은 <select>를 조종하는 표시 레이어 (값/이벤트는 select 그대로 유지)
+function renderVoicePills(mountId, selectId) {
+  const mount = $(mountId), sel = $(selectId);
+  if (!mount || !sel) return;
+  const cur = sel.value;
+  let html = "";
+  for (const o of sel.querySelectorAll("option")) {
+    if (!o.value) continue; // '기본'(빈 값) 단추는 두지 않음
+    const label = o.textContent.trim().replace(/\s*\([^)]*\)\s*$/, ""); // " (M5)" 꼬리 제거
+    html += `<button type="button" class="vpill${o.value === cur ? " active" : ""}" data-val="${esc(o.value)}">${esc(label)}</button>`;
+  }
+  mount.innerHTML = html;
+  mount.querySelectorAll(".vpill").forEach(b => b.addEventListener("click", () => {
+    sel.value = b.dataset.val;
+    mount.querySelectorAll(".vpill").forEach(x => x.classList.toggle("active", x === b));
+    sel.dispatchEvent(new Event("change"));
+  }));
 }
 function fmtT(s) { return (Math.round((s || 0) * 100) / 100).toFixed(2); }
 function srtTimeToSec(t) {
@@ -744,7 +973,8 @@ async function genAudio() {
 // ---- 전체 보이스 일괄 적용 (③ 상단) ----
 function fillVoiceAll() {
   const sel = $("voiceAll"); if (!sel || sel.options.length) return;
-  sel.innerHTML = voiceSelectHtml("");
+  sel.innerHTML = voiceSelectHtml("M5"); // 기본 M5 초기 선택
+  renderVoicePills("voiceAllPills", "voiceAll");
 }
 async function applyVoiceAll() {
   if (!JOB) { alert("먼저 ③에서 번들을 저장하세요."); return; }
@@ -847,6 +1077,132 @@ async function clearDraft() {
   if (!confirm("기존 렌더 결과(draft)를 삭제할까요?")) return;
   try { const d = await api(`/jobs/${JOB}/clear-draft`, { method: "POST" }); $("renderLogs").textContent = `삭제됨: ${d.removed}개 파일`; $("player").classList.add("hidden"); $("videoLink").classList.add("hidden"); }
   catch (e) { alert("삭제 실패: " + e.message); }
+}
+
+// ---- 🎬 인트로 (가로 16:9) ----
+let introTimer = null;
+// ✨ 인트로 대본 LLM 작성/다시쓰기
+async function genIntroScript() {
+  const deck = $("manualScript").value.trim();
+  if (!deck) { alert("본편 대본이 필요합니다 (① 대본 탭)."); return; }
+  if (!JOB) { alert("먼저 ③에서 번들을 저장하세요."); return; }
+  const btn = $("introScriptBtn"); btn.disabled = true;
+  $("introScriptStatus").textContent = "대본 작성 중…";
+  try {
+    const d = await api(`/jobs/${JOB}/intro-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        script_text: deck,
+        duration: parseFloat($("introDuration").value) || 15,
+        speed: parseFloat($("introSpeed").value) || 1.15,
+      }),
+    });
+    $("introScript").value = d.script || "";
+    $("introScriptStatus").textContent = `✓ 작성됨 (${($("introScript").value || "").length}자) — 수정 가능`;
+  } catch (e) {
+    $("introScriptStatus").textContent = "실패: " + e.message;
+  } finally { btn.disabled = false; }
+}
+async function genIntro() {
+  if (!JOB) { alert("먼저 ③에서 번들을 저장하세요."); showTab("audio"); return; }
+  $("introGenBtn").disabled = true;
+  $("introBar").style.display = "block"; $("introBarFill").style.width = "0%";
+  $("introPlayer").classList.add("hidden"); $("introLink").classList.add("hidden");
+  $("introLogsWrap").classList.remove("hidden");
+  $("introLogs").textContent = "인트로 생성 시작…";
+  $("introStatus").textContent = "생성 중…";
+  try {
+    await api(`/jobs/${JOB}/intro`, {
+      method: "POST",
+      body: JSON.stringify({
+        duration: parseFloat($("introDuration").value) || 15,
+        speed: parseFloat($("introSpeed").value) || 1.15,
+        resolution: $("introResolution").value,
+        backdrop: $("introBackdrop").value,
+        order: $("introOrder").value,
+        sfx: $("introSfx").value,
+        script: $("introScript").value.trim(),
+        voice: $("introVoice").value,
+      }),
+    });
+    if (introTimer) clearInterval(introTimer);
+    introTimer = setInterval(introPoll, 1500);
+  } catch (e) {
+    $("introLogs").textContent = "오류: " + e.message;
+    $("introStatus").textContent = "실패";
+    $("introGenBtn").disabled = false;
+  }
+}
+async function introPoll() {
+  if (!JOB) return;
+  let job; try { job = await api(`/jobs/${JOB}`); } catch (e) { return; }
+  const r = job.result || {};
+  const logs = r.intro_logs || [];
+  $("introLogs").textContent = logs.join("\n");
+  $("introLogs").scrollTop = $("introLogs").scrollHeight;
+  let pct = 0;
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const m = /progress=(\d+)\/(\d+)/.exec(logs[i]);
+    if (m) { pct = Math.round((+m[1] / +m[2]) * 100); break; }
+  }
+  if (pct) $("introBarFill").style.width = pct + "%";
+  if (!r.intro_generating) {
+    clearInterval(introTimer); introTimer = null;
+    $("introGenBtn").disabled = false;
+    if (r.intro && r.intro.path) {
+      $("introBarFill").style.width = "100%";
+      const url = `${API}/jobs/${JOB}/intro-video?t=${Date.now()}`;
+      $("introPlayer").src = url; $("introPlayer").classList.remove("hidden");
+      $("introLink").href = url; $("introLink").classList.remove("hidden");
+      $("introStatus").textContent = "✓ 인트로 완성";
+    } else if (r.intro_error) {
+      $("introStatus").textContent = "실패";
+      $("introLogs").textContent += "\n\n[실패] " + r.intro_error;
+    }
+  }
+}
+
+// ---- 🔗 인트로 + 본편 합치기 ----
+let mergeTimer = null;
+async function genMerge() {
+  if (!JOB) { alert("먼저 ③에서 번들을 저장하세요."); return; }
+  $("mergeIntroBtn").disabled = true;
+  $("mergeBar").style.display = "block"; $("mergeBarFill").style.width = "30%";
+  $("mergedPlayer").classList.add("hidden"); $("mergedLink").classList.add("hidden");
+  $("mergeLogsWrap").classList.remove("hidden");
+  $("mergeLogs").textContent = "합치는 중…";
+  $("mergeStatus").textContent = "합치는 중…";
+  try {
+    await api(`/jobs/${JOB}/merge-intro`, { method: "POST", body: "{}" });
+    if (mergeTimer) clearInterval(mergeTimer);
+    mergeTimer = setInterval(mergePoll, 1500);
+  } catch (e) {
+    $("mergeLogs").textContent = "오류: " + e.message;
+    $("mergeStatus").textContent = "실패";
+    $("mergeIntroBtn").disabled = false;
+  }
+}
+async function mergePoll() {
+  if (!JOB) return;
+  let job; try { job = await api(`/jobs/${JOB}`); } catch (e) { return; }
+  const r = job.result || {};
+  const logs = r.merge_logs || [];
+  $("mergeLogs").textContent = logs.join("\n");
+  $("mergeLogs").scrollTop = $("mergeLogs").scrollHeight;
+  if (!r.merge_generating) {
+    clearInterval(mergeTimer); mergeTimer = null;
+    $("mergeIntroBtn").disabled = false;
+    if (r.merged && r.merged.path) {
+      $("mergeBarFill").style.width = "100%";
+      const url = `${API}/jobs/${JOB}/merged-video?t=${Date.now()}`;
+      $("mergedPlayer").src = url; $("mergedPlayer").classList.remove("hidden");
+      $("mergedLink").href = url; $("mergedLink").classList.remove("hidden");
+      $("mergeStatus").textContent = "✓ 합본 완성 (원본 보존)";
+    } else if (r.merge_error) {
+      $("mergeStatus").textContent = "실패";
+      $("mergeLogs").textContent += "\n\n[실패] " + r.merge_error;
+    }
+  }
 }
 
 // ---- 🎞️ 쇼츠 (세로 9:16) ----
@@ -967,6 +1323,8 @@ on("saveTargetBtn", "click", saveTarget);
 on("ragBtn", "click", ragLearn);
 on("researchBtn", "click", deepResearch);
 on("reviewBtn", "click", reviewScript);
+on("reviseBtn", "click", reviseScript);
+on("autoReviewBtn", "click", autoReview);
 on("ytMetaBtn", "click", ytMeta);
 on("copyScriptBtn", "click", copyScript);
 on("rcGenBtn", "click", genRenderCode);
@@ -974,13 +1332,16 @@ on("rcCopyBtn", "click", copyRenderCode);
 on("rcRecommendBtn", "click", () => recommendChunking(false));
 on("designToggle", "click", () => $("designPanel").classList.toggle("hidden"));
 on("designPreset", "change", e => applyDesignPreset(parseInt(e.target.value, 10)));
+on("gTotal", "change", e => { if ($("rcTotal")) $("rcTotal").value = e.target.value; });
+on("gAudience", "change", applyDesignByAudience);
 on("designSaveBtn", "click", saveDesignPreset);
 on("voicePreviewBtn", "click", previewVoice);
 on("voiceStyle", "change", echoVoice);
 on("bundlesRefresh", "click", refreshBundles);
-on("loadBundleBtn", "click", loadBundle);
+on("bundleDirLoadBtn", "click", () => loadBundleByDir($("bundleDirInput").value));
 on("saveBtn", "click", saveBundle);
 on("saveBtn2", "click", saveFromImages);
+on("saveBtn3", "click", saveFromAudio);
 on("synthAllBtn", "click", synthAll);
 on("voiceAllBtn", "click", applyVoiceAll);
 on("pronDictBtn", "click", openPronDict);
@@ -992,6 +1353,9 @@ on("clearDraftBtn", "click", clearDraft);
 on("openDraftBtn", "click", openDraftFolder);
 on("ytCopyBtn", "click", ytCopy);
 on("ytClearBtn", "click", ytClear);
+on("introGenBtn", "click", genIntro);
+on("introScriptBtn", "click", genIntroScript);
+on("mergeIntroBtn", "click", genMerge);
 on("shortsGenBtn", "click", genShorts);
 on("shortsMetaBtn", "click", shortsMeta);
 on("shortsMetaCopyBtn", "click", shortsMetaCopy);
@@ -1000,12 +1364,21 @@ on("gearBtn", "click", toggleSettings);
 on("nlmRecheck", "click", () => {});
 document.querySelectorAll("#provToggle button").forEach(b => b.addEventListener("click", () => setProvider(b.dataset.prov)));
 on("llmLoginBtn", "click", llmLogin);
+on("llmModel", "change", e => setModel(e.target.value));
 
 wireSrcDrop();
 buildSlots();
 fillVoiceAll();
+if ($("introVoice")) $("introVoice").innerHTML = voiceSelectHtml("M5");
+renderVoicePills("voicePills", "voiceStyle");
+renderVoicePills("audiencePills", "gAudience");     // 타겟 청중 — 버튼형
+renderVoicePills("objectivePills", "gObjective");   // 발표 목적 — 버튼형
 loadLlmStatus();
 echoVoice();
 refreshBundles();
-loadDesignPresets();
-loadTarget();
+// 프리셋 로드 + 타겟 복원 후, 청중/목적 버튼 활성표시 재동기화 + 디자인 프리셋 자동 선택
+Promise.all([loadDesignPresets(), loadTarget()]).then(() => {
+  renderVoicePills("audiencePills", "gAudience");
+  renderVoicePills("objectivePills", "gObjective");
+  applyDesignByAudience();
+});

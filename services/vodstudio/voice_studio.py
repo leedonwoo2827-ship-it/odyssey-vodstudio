@@ -201,6 +201,37 @@ def set_voices(bundle_dir: str | Path, voice: str | None, only: list[int] | None
     return {"changed": changed, "voice": code}
 
 
+def set_scene_texts(
+    bundle_dir: str | Path,
+    scene: int,
+    *,
+    narration_text: str | None = None,
+    srt_text: str | None = None,
+) -> dict:
+    """씬의 발음(narration_text)/자막(srt_text)을 대본 JSON에 저장한다.
+
+    None인 필드는 건드리지 않는다. 이렇게 저장해 둬야 새로고침/전체 음성 생성/재생성 후에도
+    발음이 자막으로 원복되지 않고 '발음은 발음대로' 유지된다.
+    """
+    bundle = Path(bundle_dir).resolve()
+    sp = find_script(bundle)
+    data = _json.loads(sp.read_text(encoding="utf-8"))
+    saved = False
+    for pos, sc in enumerate(data.get("scenes") or []):
+        idx = int(sc.get("scene") or sc.get("scene_number") or pos + 1)
+        if idx != int(scene):
+            continue
+        if narration_text is not None:
+            sc["narration_text"] = narration_text
+        if srt_text is not None:
+            sc["srt_text"] = srt_text
+        saved = True
+        break
+    if saved:
+        sp.write_text(_json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"scene": int(scene), "saved": saved}
+
+
 async def synth_scene_text(
     bundle_dir: str | Path,
     scene: int,
@@ -236,6 +267,12 @@ async def synth_scene_text(
             set_voices(bundle, code, only=[int(scene)])
         except Exception:
             pass
+    # 발음(text)/자막(srt_text) 편집을 대본 JSON에 저장 → 재생성/새로고침/전체생성 후에도
+    # 발음이 자막으로 원복되지 않고 편집한 발음 그대로 유지된다.
+    try:
+        set_scene_texts(bundle, scene, narration_text=text, srt_text=srt_text)
+    except Exception:
+        pass
     wav = await engine.synth(text, voice_code=code, total_step=total_step, speed=speed)
 
     audio_dir = bundle / "audio"
@@ -268,6 +305,28 @@ async def synth_scene_text(
         "subtitle_file": srt_filename(chap, int(scene)),
         "cues": [{"text": c.text, "start": c.start, "end": c.end} for c in cues],
     }
+
+
+async def synth_intro_narration(bundle_dir: str | Path, text: str,
+                                voice: str | None = None) -> dict:
+    """인트로용 내레이션을 새로 녹음(TTS) → draft/chNN_intro_narration.wav 로 저장.
+
+    정상 속도로 합성하고, 빠른 재생(atempo)은 영상 렌더 단계에서 적용한다.
+    voice = M1..F5 코드 또는 스타일명(비면 번들 기본 보이스).
+    """
+    bundle = Path(bundle_dir).resolve()
+    chap = _bundle_chapter_id(bundle) or "ch"
+    if not (text or "").strip():
+        raise ValueError("빈 인트로 대본입니다.")
+    engine = await Engine.get()
+    code = voice_code_for_style(voice) if (voice or "").strip() else _resolve_voice(bundle, 1, None)
+    wav = await engine.synth(text.strip(), voice_code=code)
+    out_dir = bundle / "draft"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    wav_path = out_dir / f"{chap}_intro_narration.wav"
+    write_wav(wav_path, wav, engine.sample_rate)
+    return {"path": str(wav_path), "voice": code,
+            "duration": round(float(len(wav)) / float(engine.sample_rate), 3)}
 
 
 def save_scene_cues(bundle_dir: str | Path, scene: int, cues_data: list[dict]) -> dict:

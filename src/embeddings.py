@@ -201,6 +201,7 @@ def _load_persisted_endpoint() -> dict:
 
 
 _http_embed_down = False  # process-level latch: skip re-probing a dead endpoint
+_embedding_client_cache = None  # process-level singleton: the model load is expensive
 
 
 def reset_http_embed_state():
@@ -209,13 +210,22 @@ def reset_http_embed_state():
     setting changes (e.g. the user starts Ollama and saves the endpoint) —
     otherwise a latch tripped at startup would keep us on FastEmbed for the
     whole process even after the endpoint comes back."""
-    global _http_embed_down
+    global _http_embed_down, _embedding_client_cache
     _http_embed_down = False
+    _embedding_client_cache = None  # endpoint may have changed — rebuild the client
 
 
 def get_embedding_client():
-    """Factory: try HTTP API first, fall back to local fastembed."""
-    global _http_embed_down
+    """Factory: try HTTP API first, fall back to local fastembed.
+
+    The successful client is cached for the process — instantiating FastEmbed
+    reloads the ONNX model from disk (~0.5-1s each), so without this cache every
+    RAG search/embed call re-loaded the model. Call reset_http_embed_state() to
+    invalidate when the embedding endpoint setting changes."""
+    global _http_embed_down, _embedding_client_cache
+
+    if _embedding_client_cache is not None:
+        return _embedding_client_cache
 
     # Check for a persisted custom endpoint (saved from admin panel)
     persisted = _load_persisted_endpoint()
@@ -234,6 +244,7 @@ def get_embedding_client():
             client = EmbeddingClient()
             client.get_sentence_embedding_dimension()  # health check
             logger.info(f"Using HTTP embedding API: {client.url} model={client.model}")
+            _embedding_client_cache = client
             return client
         except Exception as e:
             _http_embed_down = True
@@ -244,6 +255,7 @@ def get_embedding_client():
         client = FastEmbedClient()
         client.get_sentence_embedding_dimension()
         logger.info(f"Using local FastEmbed: model={client.model}")
+        _embedding_client_cache = client
         return client
     except ImportError:
         logger.error("fastembed not installed — run: pip install fastembed")

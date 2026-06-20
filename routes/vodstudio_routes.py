@@ -203,6 +203,24 @@ def setup_vodstudio_routes() -> APIRouter:
         _owner(request)
         return await asyncio.to_thread(llm_backend.status_all)
 
+    @router.get("/llm/models")
+    async def llm_models(request: Request):
+        """활성 공급자의 모델 목록 + 현재 선택 모델. (codex: `codex debug models`)"""
+        _owner(request)
+        models = await asyncio.to_thread(llm_backend.list_models)
+        current = await asyncio.to_thread(llm_backend.get_model)
+        return {"models": models, "current": current, "provider": llm_backend.get_provider()}
+
+    class LLMModelRequest(BaseModel):
+        model: str
+
+    @router.post("/llm/model")
+    async def llm_set_model(body: LLMModelRequest, request: Request):
+        """대본 생성에 쓸 모델 선택(활성 공급자 기준). 비우면 기본값으로."""
+        _owner(request)
+        await asyncio.to_thread(llm_backend.set_model, (body.model or "").strip())
+        return {"ok": True, "current": await asyncio.to_thread(llm_backend.get_model)}
+
     class LLMProviderRequest(BaseModel):
         provider: str
 
@@ -352,6 +370,23 @@ def setup_vodstudio_routes() -> APIRouter:
                 out.append((name, txt.strip()))
         return out
 
+    @router.post("/analyze-source")
+    async def analyze_source(request: Request, files: List[UploadFile] = File(...),
+                             job_id: str = Form("")):
+        """첨부 자료의 텍스트 글자수만 빠르게 계산 → 길이 옵션(5/10/15/30분) 표시용.
+
+        색인(임베딩)은 하지 않으므로 가볍고 빠르다. job_id가 있으면 재사용한다.
+        """
+        owner = _owner(request)
+        sources = await _extract_uploads(files)
+        if not sources:
+            raise HTTPException(400, "텍스트를 추출할 수 있는 파일이 없습니다. (스캔 PDF면 텍스트 추출이 안 될 수 있어요)")
+        total = sum(len(t or "") for _, t in sources)
+        job = (manager.get(job_id, owner) if job_id else None) or manager.create(owner, {"mode": "analyze"})
+        job.result["source_chars"] = total
+        return {"job_id": job.id, "source_chars": total,
+                "files": [n for n, _ in sources]}
+
     @router.post("/rag/index")
     async def rag_index(request: Request, files: List[UploadFile] = File(...),
                         job_id: str = Form("")):
@@ -448,14 +483,49 @@ def setup_vodstudio_routes() -> APIRouter:
         work = str(orchestrator._work_dir(job))
         if not local_rag.load_index(work):
             raise HTTPException(400, "검수는 📚 RAG 근거가 필요합니다. 먼저 자료를 학습하세요.")
+        # 대본 전체를 골고루 덮는 질의로 근거를 모은다(앞부분·법령 전용 하드코딩 제거 → 오탐 방지).
         ctx = await asyncio.to_thread(enrich.gather_context, work,
-                                     [body.script_text[:500], "의무 벌칙 정의 절차"])
+                                     enrich.review_queries(body.script_text), k=8, max_chars=22000)
         report = await _llm_generate(enrich.build_review_prompt(body.script_text, ctx))
         return {"report": report}
+
+    class ReviseRequest(BaseModel):
+        script_text: str
+        review_report: str = ""
+
+    @router.post("/jobs/{job_id}/revise-script")
+    async def revise_script(job_id: str, body: ReviseRequest, request: Request):
+        """🟡 검수 반영 수정: 검수 결과(과장/모호 위주)를 적용해 대본을 다듬어 전체 재출력.
+
+        출력 토큰 한계로 끝부분이 잘리지 않도록 슬라이드 묶음(12장) 단위로 병렬 처리 후 합친다.
+        """
+        job = manager.get(job_id, _owner(request))
+        if not job:
+            raise HTTPException(404, "Job not found")
+        if not (body.script_text or "").strip():
+            raise HTTPException(400, "수정할 대본이 없습니다.")
+        if not (body.review_report or "").strip():
+            raise HTTPException(400, "먼저 ✅ 대본 자동 검수를 실행하세요. (검수 결과가 필요합니다)")
+        from services.vodstudio import enrich, local_rag
+        work = str(orchestrator._work_dir(job))
+        ctx = ""
+        if local_rag.load_index(work):
+            ctx = await asyncio.to_thread(enrich.gather_context, work,
+                                         enrich.review_queries(body.script_text), k=6, max_chars=14000)
+        chunks = enrich.split_slides(body.script_text, per=12)
+
+        async def _revise(chunk: str) -> str:
+            return await _llm_generate(enrich.build_revise_prompt(chunk, body.review_report, ctx))
+
+        parts = await asyncio.gather(*[_revise(c) for c in chunks])
+        return {"script": "\n\n".join(p.strip() for p in parts if p and p.strip())}
 
     class YouTubeRequest(BaseModel):
         script_text: str
         title_hint: str = ""
+        book_title: str = ""      # 책(시리즈) 제목 — 제목 라벨/설명 첫 줄에 사용
+        chapter_no: str = ""      # 장 번호 (비우면 script.json의 chapter)
+        chapter_title: str = ""   # 장 제목 (비우면 script.json의 subtitle/title)
 
     @router.post("/jobs/{job_id}/youtube-meta")
     async def youtube_meta(job_id: str, body: YouTubeRequest, request: Request):
@@ -463,25 +533,60 @@ def setup_vodstudio_routes() -> APIRouter:
         job = manager.get(job_id, _owner(request))
         if not job:
             raise HTTPException(404, "Job not found")
+        import json as _json
         from services.vodstudio import enrich, voice_studio as vs
-        # 영상 전체를 덮는 압축 타임라인(씬별 누적 시작시각 + 제목) — 챕터가 끝까지 나오게.
-        timeline, total_dur = "", ""
+
+        def _hms(sec: float) -> str:
+            s = int(round(max(0.0, sec)))
+            h, r = divmod(s, 3600)
+            m, s = divmod(r, 60)
+            return f"{h:02d}:{m:02d}:{s:02d}"
+
+        # 영상 전체를 덮는 타임라인(씬별 시작시각 HH:MM:SS + 제목) — 챕터가 끝까지 나오게.
+        timeline, total_dur, genre = "", "", ""
+        doc_chapter, doc_ctitle = "", ""
         bdir = (job.result.get("bundle") or {}).get("bundle_dir")
         if bdir and Path(bdir).exists():
+            # script.json 메타(장르/장번호/장제목) — 입력 미기재 시 기본값
             try:
-                st = await asyncio.to_thread(vs.bundle_status, bdir)
-                lines, cum = [], 0.0
-                for s in st.get("scenes", []):
-                    mm, ss = divmod(int(cum), 60)
-                    lines.append(f"{mm:02d}:{ss:02d} 씬{s['scene']} {s.get('title','')}")
-                    cum += float(s.get("audio_duration") or s.get("narration_seconds") or 0)
-                timeline = "\n".join(lines)
-                mm, ss = divmod(int(cum), 60)
-                total_dur = f"{mm:02d}:{ss:02d}"
+                scripts = sorted(Path(bdir, "script").glob("ch*_script.json"))
+                if scripts:
+                    doc = _json.loads(scripts[0].read_text(encoding="utf-8"))
+                    genre = str(doc.get("genre") or "")
+                    doc_chapter = str(doc.get("chapter") or "")
+                    doc_ctitle = str(doc.get("subtitle") or doc.get("title") or "")
             except Exception:
                 pass
+            # 1순위: draft/render_report.json — 실제 렌더 타임라인(mp3 길이·크로스페이드 반영)
+            rr = Path(bdir, "draft", "render_report.json")
+            if rr.exists():
+                try:
+                    data = _json.loads(rr.read_text(encoding="utf-8"))
+                    lines = [f"{_hms(float(s.get('timeline_start') or 0))} 씬{s.get('scene')} {s.get('title','')}"
+                             for s in data.get("scenes", [])]
+                    timeline = "\n".join(lines)
+                    total_dur = _hms(float(data.get("total_output_seconds") or 0))
+                except Exception:
+                    timeline = ""
+            # 2순위(렌더 전): 생성된 음성 길이 누적
+            if not timeline:
+                try:
+                    st = await asyncio.to_thread(vs.bundle_status, bdir)
+                    lines, cum = [], 0.0
+                    for s in st.get("scenes", []):
+                        lines.append(f"{_hms(cum)} 씬{s['scene']} {s.get('title','')}")
+                        cum += float(s.get("audio_duration") or s.get("narration_seconds") or 0)
+                    timeline = "\n".join(lines)
+                    total_dur = _hms(cum)
+                except Exception:
+                    pass
+        chapter_no = (body.chapter_no or "").strip() or doc_chapter
+        chapter_title = (body.chapter_title or "").strip() or doc_ctitle
+        book_title = (body.book_title or "").strip()
         meta = await _llm_generate(
-            enrich.build_youtube_prompt(body.script_text, timeline, body.title_hint, total_dur))
+            enrich.build_youtube_prompt(body.script_text, timeline, body.title_hint, total_dur,
+                                        genre=genre, chapter_title=chapter_title,
+                                        book_title=book_title, chapter_no=chapter_no))
         return {"meta": meta}
 
     class SeriesMemoryRequest(BaseModel):
@@ -814,6 +919,72 @@ def setup_vodstudio_routes() -> APIRouter:
             job.result["shorts_generating"] = False
             job.updated = time.time()
 
+    # ---- 🎬 가로 인트로(16:9) 렌더 ---------------------------------------
+    async def _run_intro(job, duration: float, speed: float, resolution: str,
+                         backdrop: str, order: str, sfx: str, script: str, voice: str) -> None:
+        job.result["intro_generating"] = True
+        job.result["intro_error"] = ""
+        job.result["intro_logs"] = []
+        job.result.pop("intro", None)
+        job.updated = time.time()
+
+        def _line(l: str) -> None:
+            job.result["intro_logs"].append(l)
+            job.updated = time.time()
+
+        try:
+            bdir = (job.result.get("bundle") or {}).get("bundle_dir")
+            if not bdir or not Path(bdir).exists():
+                raise mp4_render.RenderError("번들이 아직 생성되지 않았습니다.")
+            # 1) 인트로 대본으로 음성 새로 녹음(TTS) — 비어 있으면 본편 오프닝 음성 사용
+            audio_path = ""
+            script = (script or "").strip()
+            if script:
+                from services.vodstudio import voice_studio as vs
+                _line("[intro] 인트로 음성 재녹음(TTS) 중…")
+                res = await vs.synth_intro_narration(bdir, script, voice=voice)
+                audio_path = res.get("path", "")
+                _line(f"[intro] 음성 {res.get('duration', '?')}s · 보이스 {res.get('voice', '')}")
+            # 2) 렌더
+            final = await mp4_render.render_intro(
+                bdir, duration=duration, speed=speed, resolution=resolution,
+                backdrop=backdrop, order=order, sfx=sfx, audio_path=audio_path, script_text=script,
+                on_line=_line)
+            job.result["intro"] = {"path": final, "duration": duration, "speed": speed}
+            _line(f"[ok] {final}")
+        except Exception as e:  # noqa: BLE001
+            job.result["intro_error"] = str(e)
+            _line(f"[error] {e}")
+        finally:
+            job.result["intro_generating"] = False
+            job.updated = time.time()
+
+    # ---- 🔗 인트로 + 본편 합치기 (원본 보존) ------------------------------
+    async def _run_merge(job) -> None:
+        job.result["merge_generating"] = True
+        job.result["merge_error"] = ""
+        job.result["merge_logs"] = []
+        job.result.pop("merged", None)
+        job.updated = time.time()
+
+        def _line(l: str) -> None:
+            job.result["merge_logs"].append(l)
+            job.updated = time.time()
+
+        try:
+            bdir = (job.result.get("bundle") or {}).get("bundle_dir")
+            if not bdir or not Path(bdir).exists():
+                raise mp4_render.RenderError("번들이 아직 생성되지 않았습니다.")
+            final = await mp4_render.merge_intro(bdir, on_line=_line)
+            job.result["merged"] = {"path": final}
+            _line(f"[ok] {final}")
+        except Exception as e:  # noqa: BLE001
+            job.result["merge_error"] = str(e)
+            _line(f"[error] {e}")
+        finally:
+            job.result["merge_generating"] = False
+            job.updated = time.time()
+
     @router.get("/jobs/{job_id}/audio-status")
     async def audio_status_route(job_id: str, request: Request):
         job = manager.get(job_id, _owner(request))
@@ -886,6 +1057,89 @@ def setup_vodstudio_routes() -> APIRouter:
         path = shorts.get("path")
         if not path or not Path(path).exists():
             raise HTTPException(404, "생성된 쇼츠가 없습니다")
+        return FileResponse(path, media_type="video/mp4", filename=Path(path).name,
+                            content_disposition_type="inline")
+
+    class IntroScriptRequest(BaseModel):
+        script_text: str
+        duration: float = 15.0
+        speed: float = 1.15
+
+    @router.post("/jobs/{job_id}/intro-script")
+    async def intro_script(job_id: str, body: IntroScriptRequest, request: Request):
+        """✨ 길이/속도에 맞는 인트로 내레이션 대본을 LLM이 작성/다시쓰기."""
+        job = manager.get(job_id, _owner(request))
+        if not job:
+            raise HTTPException(404, "Job not found")
+        if not (body.script_text or "").strip():
+            raise HTTPException(400, "본편 대본이 필요합니다 (① 대본 탭).")
+        from services.vodstudio import enrich
+        script = await _llm_generate(
+            enrich.build_intro_script_prompt(body.script_text, body.duration, body.speed))
+        return {"script": (script or "").strip()}
+
+    class IntroRequest(BaseModel):
+        duration: float = 15.0
+        speed: float = 1.15
+        resolution: str = "1920x1080"
+        backdrop: str = "plain"  # plain | dark | blur
+        order: str = "reverse"   # reverse | forward
+        sfx: str = "both"        # both | whoosh | ambient | none
+        script: str = ""         # 비면 본편 오프닝 음성 사용
+        voice: str = ""          # M1..F5 / 스타일명 (비면 번들 기본)
+
+    @router.post("/jobs/{job_id}/intro")
+    async def start_intro(job_id: str, body: IntroRequest, request: Request):
+        """🎬 가로 16:9 인트로 생성(전체화면 켄번스 빠른 컷 + 목차/요약 + 빠른 나레이션)."""
+        job = manager.get(job_id, _owner(request))
+        if not job:
+            raise HTTPException(404, "Job not found")
+        if not (job.result.get("bundle") or {}).get("bundle_dir"):
+            raise HTTPException(400, "먼저 번들을 생성하세요")
+        if not mp4_render.available():
+            raise HTTPException(503, "mp4maker 체크아웃이 없습니다 (./mp4maker)")
+        if job.result.get("intro_generating"):
+            return {"started": False, "reason": "이미 인트로 생성 중"}
+        asyncio.create_task(_run_intro(job, body.duration, body.speed, body.resolution,
+                                       body.backdrop, body.order, body.sfx, body.script, body.voice))
+        return {"started": True, "duration": body.duration, "speed": body.speed}
+
+    @router.get("/jobs/{job_id}/intro-video")
+    async def serve_intro_video(job_id: str, request: Request):
+        job = manager.get(job_id, _owner(request))
+        if not job:
+            raise HTTPException(404, "Job not found")
+        intro = job.result.get("intro") or {}
+        path = intro.get("path")
+        if not path or not Path(path).exists():
+            raise HTTPException(404, "생성된 인트로가 없습니다")
+        return FileResponse(path, media_type="video/mp4", filename=Path(path).name,
+                            content_disposition_type="inline")
+
+    @router.post("/jobs/{job_id}/merge-intro")
+    async def start_merge_intro(job_id: str, request: Request):
+        """🔗 인트로 + 본편 합치기 → chNN_with_intro.mp4 (원본 보존)."""
+        job = manager.get(job_id, _owner(request))
+        if not job:
+            raise HTTPException(404, "Job not found")
+        if not (job.result.get("bundle") or {}).get("bundle_dir"):
+            raise HTTPException(400, "먼저 번들을 생성하세요")
+        if not mp4_render.available():
+            raise HTTPException(503, "mp4maker 체크아웃이 없습니다 (./mp4maker)")
+        if job.result.get("merge_generating"):
+            return {"started": False, "reason": "이미 합치는 중"}
+        asyncio.create_task(_run_merge(job))
+        return {"started": True}
+
+    @router.get("/jobs/{job_id}/merged-video")
+    async def serve_merged_video(job_id: str, request: Request):
+        job = manager.get(job_id, _owner(request))
+        if not job:
+            raise HTTPException(404, "Job not found")
+        merged = job.result.get("merged") or {}
+        path = merged.get("path")
+        if not path or not Path(path).exists():
+            raise HTTPException(404, "합본 영상이 없습니다")
         return FileResponse(path, media_type="video/mp4", filename=Path(path).name,
                             content_disposition_type="inline")
 
@@ -994,6 +1248,19 @@ def setup_vodstudio_routes() -> APIRouter:
                                     "no_subtitles": not status.get("final_mp4")}
         return {"job_id": job.id, "bundle_dir": str(bdir), "status": status,
                 "final_mp4": status.get("final_mp4"), "final_nosub_mp4": status.get("final_nosub_mp4")}
+
+    @router.post("/delete-bundle")
+    async def delete_bundle(body: LoadBundleRequest, request: Request):
+        """디스크의 번들 폴더를 삭제. 안전장치: 이름이 *_bundle 이고 script/*_script.json 이 있어야 함."""
+        _owner(request)
+        import shutil
+        bdir = Path(body.bundle_dir.strip())
+        if not bdir.is_dir():
+            raise HTTPException(400, "폴더가 존재하지 않습니다.")
+        if not bdir.name.endswith("_bundle") or not any(bdir.glob("script/*_script.json")):
+            raise HTTPException(400, "유효한 번들 폴더가 아닙니다 (이름 *_bundle · script/*_script.json 필요).")
+        await asyncio.to_thread(shutil.rmtree, bdir)
+        return {"deleted": str(bdir)}
 
     # ==================================================================
     # ③ 음성/자막 — 로컬 CPU TTS (VoiceWright/Supertonic-3) per-scene 편집

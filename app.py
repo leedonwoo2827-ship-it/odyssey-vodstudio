@@ -856,6 +856,27 @@ async def _startup_event():
     global upload_cleanup_task
     logger.info("Application starting up...")
     webhook_manager.set_loop(asyncio.get_running_loop())
+    # Windows ProactorEventLoop noise: when a browser cancels a <video> range
+    # request (play/seek/reload — e.g. the intro/merged preview players), the
+    # transport raises ConnectionResetError [WinError 10054]. It's harmless (the
+    # client just disconnected) but logs a scary red traceback that looks like a
+    # render failure. Swallow exactly those; defer everything else to the default.
+    try:
+        _loop = asyncio.get_running_loop()
+        _prev_eh = _loop.get_exception_handler()
+
+        def _quiet_conn_reset(loop, context):
+            exc = context.get("exception")
+            if isinstance(exc, (ConnectionResetError, ConnectionAbortedError)):
+                return
+            if _prev_eh is not None:
+                _prev_eh(loop, context)
+            else:
+                loop.default_exception_handler(context)
+
+        _loop.set_exception_handler(_quiet_conn_reset)
+    except Exception as _e:  # noqa: BLE001
+        logger.debug(f"conn-reset exception handler not installed: {_e}")
     # Wipe any leftover incognito sessions from previous process — they're
     # ephemeral by design and must not survive a restart.
     try:

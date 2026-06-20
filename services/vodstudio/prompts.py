@@ -44,6 +44,9 @@ Task: Analyze ALL uploaded sources and generate a consistent {total_pages}-page 
 ## Instruction Guidelines
 1. 업로드된 모든 소스 문서의 핵심 팩트와 데이터를 통합하여 논리적 흐름(서론-본론-결론)을 구축하라.
 2. 지정된 [Target Audience]의 수준과 관심사에 맞춘 전문적인 용어와 설득력 있는 문체를 사용하라.
+3. [Target Audience]는 **톤·난이도·예시 선택에만** 활용하라. 청중을 **직접 호명하지 말 것**:
+   "임직원 여러분", "여러분", "안녕하십니까" 같은 청중 지칭/인사말로 **시작하거나 끝내지 말고**,
+   첫 슬라이드부터 곧바로 **주제·핵심 내용**으로 들어가라. (마지막도 인사 없이 핵심 메시지로 마무리)
 
 ## Output Format (Strictly Follow)
 슬라이드 번호: (1~{total_pages})
